@@ -1,0 +1,10 @@
+Changes
+Makefile.PL
+MANIFEST
+META.yml
+README
+TODO
+examples/login.pl
+lib/VMware/vCloud.pm
+t/01-load.t
+t/02-header.t

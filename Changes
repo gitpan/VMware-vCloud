@@ -1,0 +1,9 @@
+Revision history for VMware::vCloud
+
+1.0  2011/06/16
+
+  Initial connection seed from sample code from hosting.com with comments from
+  the VMware communities.
+
+   - http://mylhat.com/blog/2009/09/hosting-com-vcloud-express-api-example-in-perl/
+   - http://communities.vmware.com/thread/284659
