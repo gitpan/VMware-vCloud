@@ -1,10 +1,11 @@
 package VMware::vCloud;
 
+use Data::Dumper;
 use LWP;
 use XML::Simple;
 use strict;
 
-our $VERSION = '1.2';
+our $VERSION = '1.3';
 
 ### External methods
 
@@ -224,7 +225,7 @@ dearly love a few changes, that might help things:
 
 =head1 VERSION
 
-  Version: v1.2 (2011/06/23)
+  Version: v1.3 (2011/06/25)
 
 =head1 AUTHOR
 
