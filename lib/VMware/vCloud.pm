@@ -5,7 +5,7 @@ use LWP;
 use XML::Simple;
 use strict;
 
-our $VERSION = '1.4';
+our $VERSION = '1.5';
 
 ### External methods
 
@@ -83,7 +83,6 @@ sub _regenerate {
   
   $self->{url_base} = URI->new('https://'. $self->{hostname} .'/api/v'. $self->{api_version} .'/');
   $self->_debug("API URL: $self->{url_base}");
-
 }
 
 ### Public methods
@@ -256,7 +255,7 @@ dearly love a few changes, that might help things:
 
 =head1 VERSION
 
-  Version: v1.4 (2011/06/25)
+  Version: v1.5 (2011/07/01)
 
 =head1 AUTHOR
 
