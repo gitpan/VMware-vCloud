@@ -1,5 +1,10 @@
 Revision history for VMware::vCloud
 
+1.6 2011/07/14
+
+  Added:
+    catalog_get() - List a catalogs contents
+
 1.5 2011/07/01
 
   Improved:
@@ -9,7 +14,7 @@ Revision history for VMware::vCloud
 1.4 2011/06/25
 
   Added:
-    org_get() - List an orgs catalog and contents
+    org_get() - List an organizations contents
 	examples/org_get.pl - Usage of the org_get() method
   
   Improved:
