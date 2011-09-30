@@ -1,9 +1,51 @@
 Revision history for VMware::vCloud
 
+2.01     2011/09/30
+
+  This is a major change in philosophy. Previously this module emulated the API
+  in the name of method and returned data structures.
+
+  This does not match most conceptual and desired usage for automation. People
+  do not "think" in a collection of REST API calls. They think in actions like
+  "deploy a VM."
+
+  Consequently I have moved the direct API implementation to 
+  VMware::API::vCloud. It offers an unadulterated pure-perl based view of the
+  API and its transactions.
+
+  In VMware::vCloud, I am going to try and present a more human friendly view.
+
+  Added:
+      lib/VMware/API/vCloud.pm - Raw API calls and returns.
+
+  Fixed:
+      Session ID is now handled via HTTP header, not cookies. This matches the published API docs.
+
+
+1.600.08 2011/08/02
+
+  Added:
+	examples/list-vms.pl - List all vApps and their VMs
+
+  Improved:
+    Added POD to the examples: get_org.pl, login.pl
+    Fixed double "v" on new Version in POD
+
+1.600.07 2011/07/29
+
+  Added:    
+    vdc_get() - List the contents of a Virtual Datacenter
+    vapp_get() - List the contents of a vApp
+
+  Fixed:
+    Moved to multidigit CPAN-compatible version to work around single-digit subversion numbers.
+
 1.6 2011/07/14
 
   Added:
     catalog_get() - List a catalogs contents
+
+  NB: Release created and submitted from the air on cross-country flight. :)
 
 1.5 2011/07/01
 
