@@ -1,9 +1,10 @@
 package VMware::vCloud;
 
+use Cache::Bounded;
 use VMware::API::vCloud;
 use strict;
 
-our $VERSION = 'v2.02';
+our $VERSION = 'v2.04';
 
 ### External methods
 
@@ -20,6 +21,8 @@ sub new {
   my $self  = {};
   bless($self);
 
+  our $cache = new Cache::Bounded;
+
   $self->{api} = new VMware::API::vCloud (our $host, our $user, our $pass, our $org, our $conf);
   $self->{raw_login_data} = $self->{api}->login();
 
@@ -35,8 +38,11 @@ sub login {
 
 sub get_org {
   my $self = shift @_;
-  my $id = shift @_;
+  my $id   = shift @_;
 
+  my $org = our $cache->get('get_org:'.$id);
+  return %$org if defined $org;
+  
   my $raw_org_data = $self->{api}->org_get($id);
 
   my %org;
@@ -59,6 +65,7 @@ sub get_org {
     $org{contains}{$type}{$id} = $link->{name};
   }
 
+  $cache->set('get_org:'.$id,\%org);
   return %org;
 }
 
@@ -67,6 +74,9 @@ sub get_org {
 sub get_vdc {
   my $self = shift @_;
   my $id = shift @_;
+
+  my $vdc = our $cache->get('get_vdc:'.$id);
+  return %$vdc if defined $vdc;
 
   my $raw_vdc_data = $self->{api}->vdc_get($id);
 
@@ -90,10 +100,10 @@ sub get_vdc {
     $vdc{contains}{$type}{$id} = $link->{name};
   }
   
-  
-
+  $cache->set('get_vdc:'.$id,$raw_vdc_data);
   return %$raw_vdc_data;
 }
+
 # Returns a hash of orgs the user can access
 
 sub list_orgs {
@@ -110,11 +120,50 @@ sub list_orgs {
   return wantarray ? %orgs : \%orgs;  
 }
 
-# Returns a hash of all the vapps the user can access in the given org
+sub list_templates {
+  my $self  = shift @_;
+  my $orgid = shift @_;
+
+  my $templates = our $cache->get('list_templates:'.$orgid);
+  return %$templates if defined $templates;
+
+  my %orgs = $self->list_orgs();
+
+  my %vdcs;
+  
+  for my $orgid ( keys %orgs ) {
+    my %org = $self->get_org($orgid);
+    for my $vdcid ( keys %{$org{contains}{vdc}} ) {
+      $vdcs{$vdcid}++;
+    }
+  }
+
+  my %templates;
+  
+  for my $vdcid ( keys %vdcs ) {
+    my %vdc = $self->get_vdc($vdcid);
+    for my $entity ( @{$vdc{ResourceEntities}} ) {
+      for my $name ( keys %{$entity->{ResourceEntity}} ) {
+        next unless $entity->{ResourceEntity}->{$name}->{type} eq 'application/vnd.vmware.vcloud.vAppTemplate+xml';
+        my $href = $entity->{ResourceEntity}->{$name}->{href};
+        $href =~ /([^\/]+)$/;
+        my $id = $1;
+        $templates{$id} = $name;
+      }
+    }
+  }
+
+  $cache->set('list_templates:'.$orgid,\%templates);
+  return %templates;
+}
 
 sub list_vapps {
   my $self  = shift @_;
   my $orgid = shift @_;
+
+  my $vapps = our $cache->get('list_vapps:'.$orgid);
+  return %$vapps if defined $vapps;
+
   my %orgs = $self->list_orgs();
 
   my %vdcs;
@@ -141,6 +190,7 @@ sub list_vapps {
     }
   }
 
+  $cache->set('list_vapps:'.$orgid,\%vapps);
   return %vapps;
 }
 
@@ -150,55 +200,32 @@ __END__
 
 =head1 NAME
 
-VMware::vCloud - The VMware vCloud API
+VMware::vCloud - VMware vCloud Director
 
 =head1 SYNOPSIS
 
-This module has been developed against VMware vCenter director.
-
-  my $vcd = new VMware::vCloud (
-    $hostname, $username, $password, $orgname
-  );
+  my $vcd = new VMware::vCloud ( $hostname, $username, $password, $orgname, { debug => 1 } );
   
-  my $login = $vcd->login;
+  my %vapps = $vcd->list_vapps();
 
 =head1 DESCRIPTION
 
-This module provides a Perl interface to VMware's vCloud REST interface.
-
-=head1 RETURNED VALUES
-
-Many of the methods return hash references or arrays of hash references that
-contain information about a specific "object" or concept on the vCloud Director
-server. This is a rough analog to the Managed Object Reference structure of
-the VIPERL SDK without the generic interface for retireval.
+This module provides a Perl interface to VMware's vCloud Director.
 
 =head1 EXAMPLE SCRIPTS
 
-Included in the distribution of this module are several example scripts. Hopefully
-they provide an illustrative example of the vCloud API. All scripts have
-their own POD and accept command line parameters in a similar way to the VIPERL
-SDK utilities and vghetto scripts.
+Included in the distribution of this module are several example scripts. 
+Hopefully they provide an illustrative example of the use of vCloud Director. 
+All scripts have their own POD and accept command line parameters in a similar 
+way to the VIPERL SDK utilities and vghetto scripts.
 
-    login.pl - An example script that demonstrates logging in to the 
-server.
-
-=head1 WISH LIST
-
-If someone from VMware is reading this, and has control of the API, I would
-dearly love a few changes, that might help things:
-
-=over 4
-
-=item System - It would really help if in the API guide it mentions early on that the organization to connect as an administrator account, IE: the macro organization to which all other orgs descend from is called "System." That helps a lot.
-
-=item External vs External - When you have the concept of a "fenced" network for a vApp, one of the most confusing points is the local network that is natted to the outside is referred to as "External" as is the outside IPs that the network is routed to. Walk a new user through some of the Org creation wizards and watch the confusion. Bad choice of names.
-
-=back
+	login.pl - An example script that demonstrates logging in to the server.
+	org_get.pl - Selects a random organization and prints a Data::Dumper dump of it's information.
+	list-vapps.pl - Prints a list of all VMs the user has access to.
 
 =head1 VERSION
 
-  Version: v2.02 (2011/09/30)
+  Version: v2.04 (2011/10/03)
 
 =head1 AUTHOR
 
@@ -210,28 +237,11 @@ dearly love a few changes, that might help things:
 
 =head1 DEPENDENCIES
 
-  LWP
-  XML::Simple
+  Cache::Bounded
+  VMware::API::vCloud
 
 =head1 LICENSE AND COPYRIGHT
 
   Released under Perl Artistic License
-
-=head1 SEE ALSO
-
- VMware vCloud Director
-  http://www.vmware.com/products/vcloud/
-
- VMware vCloud API Specification v1.0
-  http://communities.vmware.com/docs/DOC-12464
-
- VMware vCloud API Programming Guide v1.0
-  http://communities.vmware.com/docs/DOC-12463
-  
- vCloud API and Admin API v1.0 schema definition files
-  http://communities.vmware.com/docs/DOC-13564
-  
- VMware vCloud API Communities
-  http://communities.vmware.com/community/vmtn/developer/forums/vcloudapi
 
 =cut
