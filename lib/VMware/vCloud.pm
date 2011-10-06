@@ -5,7 +5,7 @@ use VMware::API::vCloud;
 use VMware::vCloud::vApp;
 use strict;
 
-our $VERSION = 'v2.06';
+our $VERSION = 'v2.07';
 
 =head1 NAME
 
@@ -13,9 +13,13 @@ VMware::vCloud - VMware vCloud Director
 
 =head1 SYNOPSIS
 
-  my $vcd = new VMware::vCloud ( $hostname, $username, $password, $orgname, { debug => 1 } );
-  
+  my $vcd = new VMware::vCloud ( $hostname, $username, $password, $orgname, { debug => 1 } );  
   my %vapps = $vcd->list_vapps();
+
+  my $vappid = $vapps{'My Personal vApp'};
+
+  my $vapp = $vcd->get_vapp($vappid);
+  my $ret = $vapp->power_on();
 
 =head1 DESCRIPTION
 
@@ -301,7 +305,7 @@ __END__
 
 =head1 VERSION
 
-  Version: v2.06 (2011/10/05)
+  Version: v2.07 (2011/10/06)
 
 =head1 AUTHOR
 
