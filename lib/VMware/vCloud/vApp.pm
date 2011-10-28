@@ -3,7 +3,7 @@ package VMware::vCloud::vApp;
 use Data::Dumper;
 use strict;
 
-our $VERSION = 'v2.07';
+our $VERSION = 'v2.12';
 
 =head1 NAME
 
@@ -28,7 +28,7 @@ sub new {
   our $href = shift @_;
 
   my $self = {};
-  bless($self);
+  bless($self,$class);
   
   our $data = $api->vapp_get($href);
   
@@ -97,7 +97,7 @@ __END__
 
 =head1 VERSION
 
-  Version: v2.07 (2011/10/06)
+  Version: v2.12 (2011/10/27)
 
 =head1 AUTHOR
 

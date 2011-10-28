@@ -5,7 +5,7 @@ use LWP;
 use XML::Simple;
 use strict;
 
-our $VERSION = 'v2.07';
+our $VERSION = 'v2.12';
 
 =head1 NAME
 
@@ -147,7 +147,8 @@ sub _fault {
   my $message = "\nERROR: ";
   
   if ( length(@error) and ref $error[0] eq 'HTTP::Response' ) {
-    $message .= $error[0]->status_line;
+    $message .= $error[0]->status_line;    
+    $self->_debug( Dumper(\@error) );
     die $message;
   }
   
@@ -308,8 +309,14 @@ sub post {
   my $self = shift @_;
   my $href = shift @_;
 
+  my $type = shift @_;
+  my $content = shift @_;
+
   $self->_debug("API: post($href)\n") if $self->{debug};
   my $req = HTTP::Request->new( POST => $href );
+
+  $req->content_type($type) if $type;
+  $req->content($content) if $content;
 
   my $response = $self->{ua}->request($req);
   my $data = $self->_xml_response($response);
@@ -317,6 +324,31 @@ sub post {
   my @ret = ( $response->message, $response->code, $data );
 
   return wantarray ? @ret : \@ret;
+}
+
+=head2 template_get($templateid or $templateurl)
+
+As a parameter, this method thakes the raw numeric id of the template or the full URL.
+
+It returns the requested template.
+
+=cut
+
+sub template_get {
+  my $self = shift @_;
+  my $tmpl = shift @_;
+  my $req;
+
+  $self->_debug("API: template_get($tmpl)\n") if $self->{debug};
+  
+  if ( $tmpl =~ /^[^\/]+$/ ) {
+    $req = HTTP::Request->new( GET =>  $self->{url_base} . 'tmpl/' . $tmpl );
+  } else {
+    $req = HTTP::Request->new( GET =>  $tmpl );
+  }
+
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);
 }
 
 =head2 vdc_get($vdcid or $vdcurl)
@@ -373,12 +405,25 @@ sub vapp_get {
 
 __END__
 
+=head1 BUGS and LIMITATIONS
+
+Template name validation.
+
+  Most names in the GUI (for vApps, VMs, Templates, and Catalogs) are limited to
+  128 characters, and are restricted to being composed of alpha numerics and 
+  standard keyboard punctuations. Notably, spaces and tabs are NOT allowed to
+  be entered in the GUI. However, you can upload a template in the API with a
+  space in the name. It will only be visable or usable some of the time in the 
+  GUI. Apparently there is a bug in name validation via the API.
+
 =head1 WISH LIST
 
 If someone from VMware is reading this, and has control of the API, I would
 dearly love a few changes, that might help things:
 
 =over 4
+
+=item Statistics & Dogfooding - There is an implied contract in the API. That is, anything I can see and do in the GUI I should also be able to do via the API. There are no per-VM statistics available in the API. But the statistics are shown in the GUI. Please offer per-VM statistics in the API. Crosswalking the VM name and trying to find the data in the vSphere API to do this is a pain.
 
 =item System - It would really help if in the API guide it mentions early on that the organization to connect as an administrator account, IE: the macro organization to which all other orgs descend from is called "System." That helps a lot.
 
@@ -388,7 +433,7 @@ dearly love a few changes, that might help things:
 
 =head1 VERSION
 
-  Version: v2.07 (2011/10/06)
+  Version: v2.12 (2011/10/27)
 
 =head1 AUTHOR
 
