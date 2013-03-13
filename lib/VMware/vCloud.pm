@@ -6,7 +6,7 @@ use VMware::API::vCloud;
 use VMware::vCloud::vApp;
 use strict;
 
-our $VERSION = 'v2.12';
+our $VERSION = 'v2.19';
 
 =head1 NAME
 
@@ -79,7 +79,56 @@ sub new {
   return $self;
 }
 
+sub _purge {
+  our $cache->purge();
+}
+
 ### Standard methods
+
+=head3 create_external_network($name,$gateway,$netmask,$dns1,$dns2,$suffix,$vimref,$moref,$objtype)
+
+=cut
+
+sub create_external_network {
+  my $self = shift @_;
+  my $conf = shift @_;
+
+  my $xml = '
+<vmext:VMWExternalNetwork
+   xmlns:vmext="http://www.vmware.com/vcloud/extension/v1.5"
+   xmlns:vcloud="http://www.vmware.com/vcloud/v1.5"
+   name="'.$conf->{name}.'"
+   type="application/vnd.vmware.admin.vmwexternalnet+xml">
+   <vcloud:Description>ExternalNet</vcloud:Description>
+   <vcloud:Configuration>
+      <vcloud:IpScopes>
+         <vcloud:IpScope>
+            <vcloud:IsInherited>false</vcloud:IsInherited>
+            <vcloud:Gateway>'.$conf->{gateway}.'</vcloud:Gateway>
+            <vcloud:Netmask>'.$conf->{subnet}.'</vcloud:Netmask>
+            <vcloud:Dns1>'.$conf->{dns1}.'</vcloud:Dns1>
+            <vcloud:Dns2>'.$conf->{dns2}.'</vcloud:Dns2>
+            <vcloud:DnsSuffix>'.$conf->{suffix}.'</vcloud:DnsSuffix>
+            <vcloud:IpRanges>
+               <vcloud:IpRange>
+                  <vcloud:StartAddress>'.$conf->{ipstart}.'</vcloud:StartAddress>
+                  <vcloud:EndAddress>'.$conf->{ipend}.'</vcloud:EndAddress>
+               </vcloud:IpRange>
+            </vcloud:IpRanges>
+         </vcloud:IpScope>
+      </vcloud:IpScopes>
+      <vcloud:FenceMode>isolated</vcloud:FenceMode>
+   </vcloud:Configuration>
+   <vmext:VimPortGroupRef>
+      <vmext:VimServerRef
+         href="'.$conf->{vimserver}.'" />
+      <vmext:MoRef>'.$conf->{mo_ref}.'</vmext:MoRef>
+      <vmext:VimObjectType>'.$conf->{mo_type}.'</vmext:VimObjectType>
+   </vmext:VimPortGroupRef>
+</vmext:VMWExternalNetwork>';
+  
+  return $self->{api}->post($self->{api}->{learned}->{url}->{admin}.'extension/externalnets','application/vnd.vmware.admin.vmwexternalnet+xml',$xml); 
+}
 
 =head2 create_vapp_from_template($name,$vdcid,$tmplid,$netid)
 
@@ -208,6 +257,7 @@ sub get_org {
 
   my %org;
   $org{description} = $raw_org_data->{Description}->[0];
+  $org{href}        = $raw_org_data->{href};
   $org{name}        = $raw_org_data->{name};
 
   $raw_org_data->{href} =~ /([^\/]+)$/;
@@ -218,8 +268,8 @@ sub get_org {
   for my $link ( @{$raw_org_data->{Link}} ) {
     $link->{type} =~ /^application\/vnd.vmware.vcloud.(\w+)\+xml$/;
     my $type = $1;
-    $link->{href} =~ /([^\/]+)$/;
-    my $id = $1;
+
+    my $id = $link->{href};
     
     next if $type eq 'controlAccess';
     
@@ -357,7 +407,7 @@ sub list_networks {
     for my $netblock (@networks) {
       for my $name ( keys %{$netblock->{Network}} ) {
         my $href = $netblock->{Network}->{$name}->{href};
-        $networks{$href} = $name;
+        $networks{$name} = $href;
       }
     }
   }
@@ -374,16 +424,20 @@ This method returns a hash or hashref of Organization names and IDs.
 
 sub list_orgs {
   my $self = shift @_;
+  my $orgs = our $cache->get('list_orgs:');
 
-  my %orgs;
-  for my $orgname ( keys %{$self->{raw_login_data}->{Org}} ) {
-    my $href = $self->{raw_login_data}->{Org}->{$orgname}->{href};
-    $href =~ /([^\/]+)$/;
-    my $orgid = $1;
-    $orgs{$orgid} = $orgname;
-  }
+  #unless ( defined $orgs ) {
+    $orgs = {};
+    my $ret = $self->{api}->org_list();
 
-  return wantarray ? %orgs : \%orgs;  
+    for my $orgname ( keys %{$ret->{Org}} ) {
+      warn "Org type of $ret->{Org}->{$orgname}->{type} listed for $orgname\n" unless $ret->{Org}->{$orgname}->{type} eq 'application/vnd.vmware.vcloud.org+xml';
+      $orgs->{$orgname} = $ret->{Org}->{$orgname}->{href};
+    }
+    $cache->set('list_orgs:',$orgs); 
+  #}
+  
+  return wantarray ? %$orgs : $orgs if defined $orgs;
 }
 
 =head2 list_templates()
@@ -428,27 +482,25 @@ access too.
 
 sub list_vapps {
   my $self  = shift @_;
-
   my $vapps = our $cache->get('list_vapps:');
-  return %$vapps if defined $vapps;
-
-  my %vdcs = $self->list_vdcs();
   
-  my %vapps;
-  
-  for my $vdcid ( keys %vdcs ) {
-    my %vdc = $self->get_vdc($vdcid);
-    for my $entity ( @{$vdc{ResourceEntities}} ) {
-      for my $name ( keys %{$entity->{ResourceEntity}} ) {
-        next unless $entity->{ResourceEntity}->{$name}->{type} eq 'application/vnd.vmware.vcloud.vApp+xml';
-        my $href = $entity->{ResourceEntity}->{$name}->{href};
-        $vapps{$href} = $name;
+  unless ( defined $vapps ) {
+    my %vdcs = $self->list_vdcs();
+    
+    for my $vdcid ( keys %vdcs ) {
+      my %vdc = $self->get_vdc($vdcid);
+      for my $entity ( @{$vdc{ResourceEntities}} ) {
+        for my $name ( keys %{$entity->{ResourceEntity}} ) {
+          next unless $entity->{ResourceEntity}->{$name}->{type} eq 'application/vnd.vmware.vcloud.vApp+xml';
+          my $href = $entity->{ResourceEntity}->{$name}->{href};
+          $vapps->{$href} = $name;
+        }
       }
     }
   }
-
-  $cache->set('list_vapps:',\%vapps);
-  return %vapps;
+  
+  $cache->set('list_vapps:',$vapps);
+  return wantarray ? %$vapps : $vapps if defined $vapps;
 }
 
 =head2 list_vdcs() | list_vdcs($orgid)
@@ -456,30 +508,31 @@ sub list_vapps {
 This method returns a hash or hashref of VDC names and IDs the user has
 access too.
 
-The optional argument of an $orgid will limit the returned list of VDCs in that 
-Organization.
+The optional argument of an $orgname will limit the returned list of VDCs in 
+that Organization.
 
 =cut
 
 sub list_vdcs {
-  my $self  = shift @_;
-  my $orgid = shift @_;
+  my $self    = shift @_;
+  my $orgname = shift @_;
+  my $vdcs = our $cache->get("list_vdcs:$orgname:");
 
-  my $vdcs = our $cache->get("list_vdcs:$orgid:");
-  return %$vdcs if defined $vdcs;
-
-  my %orgs = ( $orgid ? ( $orgid => 1 ) : $self->list_orgs() );
-  my %vdcs;
-  
-  for my $orgid ( keys %orgs ) {
-    my %org = $self->get_org($orgid);
-    for my $vdcid ( keys %{$org{contains}{vdc}} ) {
-      $vdcs{$vdcid} = $org{contains}{vdc}{$vdcid};
+  unless ( defined $vdcs ) {
+    $vdcs = {};
+    my %orgs = $self->list_orgs();
+    %orgs = ( $orgname => $orgs{$orgname} ) if defined $orgname; 
+    
+    for my $orgname ( keys %orgs ) {
+      my %org = $self->get_org($orgs{$orgname});
+      for my $vdcid ( keys %{$org{contains}{vdc}} ) {
+        $vdcs->{$vdcid} = $org{contains}{vdc}{$vdcid};
+      }
     }
   }
 
-  $cache->set("list_vdcs:$orgid:",\%vdcs);
-  return %vdcs;
+  $cache->set("list_vdcs:$orgname:",$vdcs);
+  return wantarray ? %$vdcs : $vdcs;
 }
 
 =head2 login()
@@ -505,7 +558,7 @@ __END__
 
 =head1 VERSION
 
-  Version: v2.12 (2011/10/27)
+  Version: v2.19 (2013/03/13)
 
 =head1 AUTHOR
 

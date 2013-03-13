@@ -29,7 +29,7 @@ USAGE:
 AUTHORSHIP:
 ================================================================================
 
-    VMware::vCloud v2.12 (2011/10/27)
+    VMware::vCloud v2.19 (2013/03/13)
 
-    (c) 2009-2011, Phillip Pollard <bennie@cpan.org>
+    (c) 2009-2013, Phillip Pollard <bennie@cpan.org>
     Released under the Perl Artistic License

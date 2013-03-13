@@ -5,7 +5,7 @@ use LWP;
 use XML::Simple;
 use strict;
 
-our $VERSION = 'v2.12';
+our $VERSION = 'v2.19';
 
 =head1 NAME
 
@@ -22,13 +22,10 @@ VMware::API::vCloud - The VMware vCloud API
 
 =head1 DESCRIPTION
 
-This module provides a Perl interface to VMware's vCloud REST API.
+This module provides a bare interface to VMware's vCloud REST API.
 
-In general, for most API calls, they are in the structure of the conecptual
-name followed by an underscore and then the REST action. (IE: org_get() for
-retrieveing an org, and org_post() for creating one.)
-
-=head1 RETURNED VALUES
+VMware::vCloud is designed for high level usage with vCloud Director. This 
+module, however, provides a more low-level access to the REST interface.
 
 Responses received from vCloud are in XML. They are translated via XML::Simple
 with ForceArray set for consistency in nesting. This is the object returned.
@@ -36,12 +33,15 @@ with ForceArray set for consistency in nesting. This is the object returned.
 Aside from the translation of XML into a perl data structure, no further 
 alteration is performed on the data.
 
-=head1 PERL MODULE METHODS
+HTTP errors are automatically parsed and die() is called. If you need to perform
+a dangerous action, do so in an eval block and evaluate $@.
+
+=head1 OBJECT METHODS
 
 These methods are not API calls. They represent the methods that create
 this module as a "wrapper" for the vCloud API.
 
-=head2 new
+=head2 new()
 
 This method creates the vCloud object.
 
@@ -87,7 +87,7 @@ sub new {
   return $self;
 }
 
-=head2 config
+=head2 config()
 
   $vcd->config( debug => 1 );
 
@@ -131,6 +131,19 @@ sub config {
 
 ### Internal methods
 
+# $self->{raw}->{version} - Full data on the API version from login (populated on api_version() call)
+# $self->{raw}->{login}
+# $self->{learned}->{version} - API version number (populated on api_version() call)
+# $self->{learned}->{url}->{login} - Authentication URL (populated on api_version() call)
+# $self->{learned}->{url}->{orglist}
+
+sub DESTROY {
+  my $self = shift @_;
+  my @dump = split "\n", Dumper($self->{learned});
+  pop @dump; shift @dump;
+  #$self->_debug("Learned variables: \n" . join("\n",@dump));
+}
+
 sub _debug {
   my $self = shift @_;
   return undef unless $self->{debug};
@@ -163,10 +176,8 @@ sub _fault {
 }
 
 sub _regenerate {
-  my $self = shift @_;
-  
+  my $self = shift @_;  
   $self->{ua} = LWP::UserAgent->new;
-  #$self->{ua}->cookie_jar({});
 
   $self->{api_version} = $self->api_version();
   $self->_debug("API Version: $self->{api_version}");
@@ -180,6 +191,7 @@ sub _xml_response {
   my $response = shift @_;
   
   if ( $response->is_success ) {
+    return undef unless $response->content;
     my $data = XMLin( $response->content, ForceArray => 1 );
     return $data;
   } else {
@@ -187,13 +199,98 @@ sub _xml_response {
   }
 }
 
-### Public methods
+=head1 REST METHODS
 
-=head1 PUBLIC API METHODS
+These are direct access to the REST web methods.
 
-=head2 api_version
+=head2 delete($url)
 
-This call queries the server for the current version of the API supported. It is implicitly called when library is instanced.
+Performs a DELETE action on the given URL, and returns the parsed XML response.
+
+=cut 
+
+sub delete {
+  my $self = shift @_;
+  my $url  = shift @_;
+  $self->_debug("API: delete($url)\n") if $self->{debug};
+  my $req = HTTP::Request->new( DELETE => $url );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);
+}
+
+=head2 get($url)
+
+Performs a GET action on the given URL, and returns the parsed XML response.
+
+=cut 
+
+sub get {
+  my $self = shift @_;
+  my $url  = shift @_;
+  $self->_debug("API: get($url)\n") if $self->{debug};
+  my $req = HTTP::Request->new( GET => $url );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);
+}
+
+=head2 get_raw($url)
+
+Performs a GET action on the given URL, and returns the unparsed HTTP::Request object.
+
+=cut 
+
+sub get_raw {
+  my $self = shift @_;
+  my $url  = shift @_;
+  $self->_debug("API: get($url)\n") if $self->{debug};
+  my $req = HTTP::Request->new( GET => $url );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+  my $response = $self->{ua}->request($req);
+  return $response->content;
+}
+
+=head2 post($url,$type,$content)
+
+Performs a POST action on the given URL, and returns the parsed XML response.
+
+The optional value for $type is set as the Content Type for the transaction. 
+
+The optional value for $content is used as the content of the post.
+
+=cut
+
+sub post {
+  my $self = shift @_;
+  my $href = shift @_;
+
+  my $type = shift @_;
+  my $content = shift @_;
+
+  $self->_debug("API: post($href)\n") if $self->{debug};
+  my $req = HTTP::Request->new( POST => $href );
+
+  $req->content($content) if $content;
+  $req->content_type($type) if $type;
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  my $response = $self->{ua}->request($req);
+  my $data = $self->_xml_response($response);
+
+  my @ret = ( $response->message, $response->code, $data );
+
+  return wantarray ? @ret : \@ret;
+}
+
+=head1 API SHORTHAND METHODS
+
+=head2 api_version 
+
+* Relative URL: /api/versions
+
+This call queries the server for the current version of the API supported. 
+It is implicitly called when library is instanced.
 
 =cut
 
@@ -207,13 +304,19 @@ sub api_version {
   my $response = $self->{ua}->request($req);
   if ( $response->status_line eq '200 OK' ) {
     my $info = XMLin( $response->content );
-    
-    my $version = 1.0;
-    for my $verblock ( @{$info->{VersionInfo}} ) { 
-      $version = $verblock->{Version} if $verblock->{Version} > $version;
+
+    #die Dumper($info);
+
+    $self->{learned}->{version} = 0;
+    for my $verblock ( @{$info->{VersionInfo}} ) {
+      if ( $verblock->{Version} > $self->{learned}->{version} ) {
+        $self->{raw}->{version}          = $verblock;
+        $self->{learned}->{version}      = $verblock->{Version};
+        $self->{learned}->{url}->{login} = $verblock->{LoginUrl};
+      }
     }
 
-    return '1.0'; # Override: $version;
+    return $self->{learned}->{version};
   } else {
     $self->_fault($response);
   }
@@ -221,18 +324,29 @@ sub api_version {
 
 =head2 login
 
-This call takes the username and password provided and creates an authentication token from the server. If successful, it returns the list of organizations the authenticated user may access.
+* Relative URL: dynamic, but usually: /login/
+
+This call takes the username and password provided in the config() and creates
+an authentication  token from the server. If successful, it returns the login
+data returned by the server.
+
+In the 5.1 version of the API, this is a list of several access URLs.
 
 =cut
 
 sub login {
   my $self = shift @_;
-  my $req = HTTP::Request->new( POST =>  $self->{url_base} . 'login' ); 
 
-  $req->authorization_basic( $self->{username} .'@'. $self->{orgname}, $self->{password} ); 
+  $self->_debug('Login URL: '.$self->{learned}->{url}->{login});
+  my $req = HTTP::Request->new( POST => $self->{learned}->{url}->{login} ); 
+
+  $req->authorization_basic( $self->{username} .'@'. $self->{orgname}, $self->{password} );
   $self->_debug("Attempting to login: " . $self->{username} .'@'. $self->{orgname} .' '. $self->{password} );
- 
 
+  $self->{learned}->{accept_header} = 'application/*+xml;version='.$self->{learned}->{version};
+  $self->_debug('Accept header: '.$self->{learned}->{accept_header});
+  $req->header( Accept => $self->{learned}->{accept_header} );
+ 
   my $response = $self->{ua}->request($req);
 
   my $token = $response->header('x-vcloud-authorization');
@@ -241,10 +355,102 @@ sub login {
   $self->_debug( "Authentication status: " . $response->status_line );
   $self->_debug( "Authentication token: " . $token );
 
-  return $self->_xml_response($response);
+  $self->{raw}->{login} = $self->_xml_response($response);
+
+  for my $link ( @{$self->{raw}->{login}->{Link}} ) {
+    $self->{learned}->{url}->{admin}         = $link->{href} if $link->{type} eq 'application/vnd.vmware.admin.vcloud+xml';
+    $self->{learned}->{url}->{entity}        = $link->{href} if $link->{type} eq 'application/vnd.vmware.vcloud.entity+xml';
+    $self->{learned}->{url}->{extensibility} = $link->{href} if $link->{type} eq 'application/vnd.vmware.vcloud.apiextensibility+xml';
+    $self->{learned}->{url}->{extension}     = $link->{href} if $link->{type} eq 'application/vnd.vmware.admin.vmwExtension+xml';
+    $self->{learned}->{url}->{orglist}       = $link->{href} if $link->{type} eq 'application/vnd.vmware.vcloud.orgList+xml';
+    $self->{learned}->{url}->{query}         = $link->{href} if $link->{type} eq 'application/vnd.vmware.vcloud.query.queryList+xml';
+    #die Dumper($self->{raw}->{login}->{Link});
+  }
+
+  return $self->{raw}->{login};
 }
 
 ### API methods
+
+=head2 admin()
+
+* Relative URL: dynamic admin URL, usually /api/admin/
+
+Parses the admin API URL to build and return a hash reference of key URLs for
+the API.
+
+=cut
+
+sub admin {
+  my $self = shift @_;
+  my $req = HTTP::Request->new( GET =>  $self->{learned}->{url}->{admin} );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  $self->_debug("API: admin()\n") if $self->{debug};
+  return $self->{learned}->{admin} if defined $self->{learned}->{admin};
+
+  my $response = $self->{ua}->request($req);
+  my $parsed = $self->_xml_response($response);
+
+  $self->{learned}->{admin}->{networks} = $parsed->{Networks}->[0]->{Network};
+  $self->{learned}->{admin}->{rights}   = $parsed->{RightReferences}->[0]->{RightReference};
+  $self->{learned}->{admin}->{roles}    = $parsed->{RoleReferences}->[0]->{RoleReference};
+  $self->{learned}->{admin}->{orgs}     = $parsed->{OrganizationReferences}->[0]->{OrganizationReference};
+  $self->{learned}->{admin}->{pvdcs}    = $parsed->{ProviderVdcReferences}->[0]->{ProviderVdcReference};
+
+  return $self->{learned}->{admin};
+}
+
+=head2 admin_extension_get()
+
+* Relative URL: dynamic admin URL followed by "/extension"
+
+=cut
+
+sub admin_extension_get {
+  my $self = shift @_;
+  $self->_debug("API: admin_extension_get()\n") if $self->{debug};
+
+  my $req = HTTP::Request->new( GET => $self->{learned}->{url}->{admin} . 'extension' );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);  
+}
+
+=head2 admin_extension_vimServer_get()
+
+=cut
+
+sub admin_extension_vimServer_get {
+  my $self = shift @_;
+  my $url  = shift @_;
+  
+  $self->_debug("API: admin_extension_vimServer_get()\n") if $self->{debug};
+
+  my $req = HTTP::Request->new( GET => $url );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);  
+}
+
+
+=head2 admin_extension_vimServerReferences_get()
+
+=cut
+
+sub admin_extension_vimServerReferences_get {
+  my $self = shift @_;
+  $self->_debug("API: admin_extension_vimServerReferences_get()\n") if $self->{debug};
+
+  my $req = HTTP::Request->new( GET => $self->{learned}->{url}->{admin} . 'extension/vimServerReferences' );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);  
+}
+
 
 =head2 catalog_get($catid or $caturl)
 
@@ -267,13 +473,64 @@ sub catalog_get {
     $req = HTTP::Request->new( GET =>  $cat );
   }
 
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
   my $response = $self->{ua}->request($req);
   return $self->_xml_response($response);
 }
 
+=head2 org_create($name,$desc,$fullname,$is_enabled)
+
+Create an organization?
+
+=cut
+
+sub org_create {
+  my $self = shift @_;
+  my $conf = shift @_;
+
+  $self->_debug("API: org_create()\n") if $self->{debug};
+  my $url = $self->{learned}->{url}->{admin} . 'orgs';
+  
+  my $vdcs;  
+  if ( defined $conf->{pvdc} and ref $conf->{pvdc} ) {
+    for my $pvdc (@{$conf->{pvdc}}) {
+      $vdcs .= '<Vdc href="'.$pvdc.'"/> ';
+    }
+  } elsif ( defined $conf->{pvdc} ) {
+      $vdcs = '<Vdc href="'.$conf->{pvdc}.'"/> ';
+  }
+  $vdcs .= "\n";
+  
+  my $xml = '
+<AdminOrg xmlns="http://www.vmware.com/vcloud/v1.5" name="'.$conf->{name}.'">
+  <Description>'.$conf->{desc}.'</Description>
+  <FullName>'.$conf->{fullname}.'</FullName>
+  <IsEnabled>'.$conf->{is_enabled}.'</IsEnabled>  
+    <Settings>
+        <OrgGeneralSettings>
+            <CanPublishCatalogs>true</CanPublishCatalogs>
+            <DeployedVMQuota>10</DeployedVMQuota>
+            <StoredVmQuota>15</StoredVmQuota>
+            <UseServerBootSequence>false</UseServerBootSequence>
+            <DelayAfterPowerOnSeconds>1</DelayAfterPowerOnSeconds>
+        </OrgGeneralSettings>
+    </Settings>
+    <Vdcs>
+      '.$vdcs.'
+    </Vdcs>  
+</AdminOrg>
+';
+
+  my $ret = $self->post($url,'application/vnd.vmware.admin.organization+xml',$xml);
+
+  return $ret->[2]->{href} if $ret->[1] == 201;
+  return $ret;
+}
+
 =head2 org_get($orgid or $orgurl)
 
-As a parameter, this method thakes the raw numeric id of the organization or the full URL detailed for the organization from the login catalog.
+As a parameter, this method takes the raw numeric id of the organization or the full URL detailed for the organization from the login catalog.
 
 It returns the requested organization.
 
@@ -292,38 +549,226 @@ sub org_get {
     $req = HTTP::Request->new( GET =>  $org );
   }
 
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
   my $response = $self->{ua}->request($req);
   return $self->_xml_response($response);
 }
 
-=head2 post($url)
+=head2 org_list()
 
-Performs the requested URL post to the server.
-
-It returns an array or arraref with three items: returned message, returned
-numeric code, and a hashref of the full XML data returned.
+Returns the full list of available organizations.
 
 =cut
 
-sub post {
+sub org_list {
   my $self = shift @_;
-  my $href = shift @_;
+  $self->_debug("API: org_list()\n") if $self->{debug};
 
-  my $type = shift @_;
-  my $content = shift @_;
-
-  $self->_debug("API: post($href)\n") if $self->{debug};
-  my $req = HTTP::Request->new( POST => $href );
-
-  $req->content_type($type) if $type;
-  $req->content($content) if $content;
+  my $req = HTTP::Request->new( GET => $self->{learned}->{url}->{orglist} );
+  $req->header( Accept => $self->{learned}->{accept_header} );
 
   my $response = $self->{ua}->request($req);
-  my $data = $self->_xml_response($response);
+  return $self->_xml_response($response);
+}
 
-  my @ret = ( $response->message, $response->code, $data );
+=head2 org_network_create($url,$conf)
 
-  return wantarray ? @ret : \@ret;
+Create an org network
+
+The conf hash reference can contain:
+
+* name,
+* desc,
+* gateway,
+* netmask,
+* dns1,
+* dns2,
+* dnssuffix,
+* is_enabled,
+* start_ip,
+* end_ip)
+
+=cut
+
+sub org_network_create {
+  my $self = shift @_;
+  my $url  = shift @_;
+  my $conf = shift @_;
+  
+  $self->_debug("API: org_network_create()\n") if $self->{debug};
+  
+=head3 remove
+  my $xml = '
+<OrgNetwork xmlns="http://www.vmware.com/vcloud/v1.5" name="'.$name.'">
+  <Description>'.$desc.'</Description>
+   <Configuration>
+      <IpScopes>
+         <IpScope>
+            <IsInherited>false</IsInherited>
+            <Gateway>'.$gateway .'</Gateway>
+            <Netmask>'.$netmask.'</Netmask>
+            <Dns1>'.$dns1.'</Dns1>
+            <Dns2>'.$dns2.'</Dns2>
+            <DnsSuffix>'.$dnssuffix.'</DnsSuffix>
+            <IpRanges>
+               <IpRange>
+                  <StartAddress>'.$start_ip.'</StartAddress>
+                  <EndAddress>'.$end_ip.'</EndAddress>
+               </IpRange>
+            </IpRanges>
+         </IpScope>
+      </IpScopes>
+      <FenceMode>natRouted</FenceMode>
+   </Configuration>
+   <EdgeGateway
+      href="https://vcloud.example.com/api/admin/gateway/2000" />
+   <IsShared>true</IsShared>
+</OrgVdcNetwork>
+  ';
+=cut
+  my $xml = '<OrgVdcNetwork
+   name="'.$conf->{name}.'"
+   xmlns="http://www.vmware.com/vcloud/v1.5">
+   <Description>'.$conf->{desc}.'</Description>
+   <Configuration>
+      <ParentNetwork
+         href="'.$conf->{parent_net_href}.'" />
+      <FenceMode>bridged</FenceMode>
+   </Configuration>
+</OrgVdcNetwork>';
+
+  $url .= '/networks';
+
+  my $ret = $self->post($url,'application/vnd.vmware.vcloud.orgVdcNetwork+xml',$xml);
+
+  return $ret->[2]->{href} if $ret->[1] == 201;
+  return $ret;
+}
+
+=head2 org_vdc_create($url,$conf)
+
+Create an org VDC
+
+The conf hash reference can contain:
+
+* name,
+* desc,
+* np_href,
+* sp_enabled,
+* sp_units,
+* sp_limit,
+* sp_default,
+* sp_href,
+* allocation_model,
+* cpu_unit
+* cpu_alloc
+* cpu_limit
+* mem_unit
+* mem_alloc
+* mem_limit
+* nic_quota
+* net_quota
+* ResourceGuaranteedMemory
+* ResourceGuaranteedCpu
+* VCpuInMhz
+* is_thin_provision
+* pvdc_name
+* pvdc_href
+* use_fast_provisioning
+
+=cut
+
+sub org_vdc_create {
+  my $self = shift @_;
+  my $url  = shift @_;
+  my $conf = shift @_;
+
+  $self->_debug("API: org_vdc_create()\n") if $self->{debug};
+  
+  my $networkpool = $conf->{np_href} ? '<NetworkPoolReference href="'.$conf->{np_href}.'"/>' : '';
+  
+  my $sp;
+  if ( defined $conf->{sp} and ref $conf->{sp} ) {
+    for my $ref ( @{$conf->{sp}} ) {
+      $sp .= '<VdcStorageProfile>
+      <Enabled>'.$ref->{sp_enabled}.'</Enabled>
+      <Units>'.$ref->{sp_units}.'</Units>
+      <Limit>'.$ref->{sp_limit}.'</Limit>
+      <Default>'.$ref->{sp_default}.'</Default>
+      <ProviderVdcStorageProfile href="'.$ref->{sp_href}.'" />
+   </VdcStorageProfile>';
+	}
+  } elsif ( defined $conf->{sp_enabled} ) {
+    $sp = '<VdcStorageProfile>
+      <Enabled>'.$conf->{sp_enabled}.'</Enabled>
+      <Units>'.$conf->{sp_units}.'</Units>
+      <Limit>'.$conf->{sp_limit}.'</Limit>
+      <Default>'.$conf->{sp_default}.'</Default>
+      <ProviderVdcStorageProfile href="'.$conf->{sp_href}.'" />
+   </VdcStorageProfile>';
+  }
+   
+  my $xml = '
+<CreateVdcParams xmlns="http://www.vmware.com/vcloud/v1.5" name="'.$conf->{name}.'">
+  <Description>'.$conf->{desc}.'</Description>
+  <AllocationModel>'.$conf->{allocation_model}.'</AllocationModel>
+   <ComputeCapacity>
+      <Cpu>
+         <Units>'.$conf->{cpu_unit}.'</Units>
+         <Allocated>'.$conf->{cpu_alloc}.'</Allocated>
+         <Limit>'.$conf->{cpu_limit}.'</Limit>
+      </Cpu>
+      <Memory>
+         <Units>'.$conf->{mem_unit}.'</Units>
+         <Allocated>'.$conf->{mem_alloc}.'</Allocated>
+         <Limit>'.$conf->{mem_limit}.'</Limit>
+      </Memory>
+   </ComputeCapacity>
+   <NicQuota>'.$conf->{nic_quota}.'</NicQuota>
+   <NetworkQuota>'.$conf->{net_quota}.'</NetworkQuota>
+   '.$sp.'
+   <ResourceGuaranteedMemory>'.$conf->{ResourceGuaranteedMemory}.'</ResourceGuaranteedMemory>
+   <ResourceGuaranteedCpu>'.$conf->{ResourceGuaranteedCpu}.'</ResourceGuaranteedCpu>
+   <VCpuInMhz>'.$conf->{VCpuInMhz}.'</VCpuInMhz>
+   <IsThinProvision>'.$conf->{is_thin_provision}.'</IsThinProvision>
+   '.$networkpool.'
+   <ProviderVdcReference
+      name="'.$conf->{pvdc_name}.'"
+      href="'.$conf->{pvdc_href}.'" />
+   <UsesFastProvisioning>'.$conf->{use_fast_provisioning}.'</UsesFastProvisioning>
+</CreateVdcParams>
+  ';
+
+  $url .= '/vdcsparams';
+
+  my $ret = $self->post($url,'application/vnd.vmware.admin.createVdcParams+xml',$xml);
+
+  return $ret->[2]->{href} if $ret->[1] == 201;
+  return $ret;
+}
+
+=head2 pdvc_get()
+
+=cut
+
+sub pvdc_get {
+  my $self = shift @_;
+  my $tmpl = shift @_;
+  my $req;
+
+  $self->_debug("API: pvdc_get($tmpl)\n") if $self->{debug};
+  
+  if ( $tmpl =~ /^[^\/]+$/ ) {
+    $req = HTTP::Request->new( GET =>  $self->{url_base} . 'tmpl/' . $tmpl );
+  } else {
+    $req = HTTP::Request->new( GET =>  $tmpl );
+  }
+
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);
 }
 
 =head2 template_get($templateid or $templateurl)
@@ -346,6 +791,8 @@ sub template_get {
   } else {
     $req = HTTP::Request->new( GET =>  $tmpl );
   }
+
+  $req->header( Accept => $self->{learned}->{accept_header} );
 
   my $response = $self->{ua}->request($req);
   return $self->_xml_response($response);
@@ -372,6 +819,25 @@ sub vdc_get {
     $req = HTTP::Request->new( GET =>  $vdc );
   }
 
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);
+}
+
+=head2 vdc_list()
+
+Returns the full list of available VDCs.
+
+=cut
+
+sub vdc_list {
+  my $self = shift @_;
+  $self->_debug("API: vdc_list()\n") if $self->{debug};
+
+  my $req = HTTP::Request->new( GET => $self->{learned}->{url}->{admin} . 'vdcs/query' );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
   my $response = $self->{ua}->request($req);
   return $self->_xml_response($response);
 }
@@ -396,6 +862,8 @@ sub vapp_get {
   } else {
     $req = HTTP::Request->new( GET =>  $vapp );
   }
+
+  $req->header( Accept => $self->{learned}->{accept_header} );
 
   my $response = $self->{ua}->request($req);
   return $self->_xml_response($response);
@@ -433,7 +901,7 @@ dearly love a few changes, that might help things:
 
 =head1 VERSION
 
-  Version: v2.12 (2011/10/27)
+  Version: v2.19 (2013/03/13)
 
 =head1 AUTHOR
 
@@ -454,19 +922,20 @@ dearly love a few changes, that might help things:
 
 =head1 SEE ALSO
 
- VMware vCloud Director
-  http://www.vmware.com/products/vcloud/
+ VMware vCloud Director Publications
+  http://www.vmware.com/support/pubs/vcd_pubs.html
+  http://pubs.vmware.com/vcd-51/index.jsp
 
- VMware vCloud API Specification v1.0
-  http://communities.vmware.com/docs/DOC-12464
-
- VMware vCloud API Programming Guide v1.0
-  http://communities.vmware.com/docs/DOC-12463
+ VMware vCloud API Programming Guide v5.1
+  http://pubs.vmware.com/vcd-51/topic/com.vmware.vcloud.api.doc_51/GUID-86CA32C2-3753-49B2-A471-1CE460109ADB.html
   
- vCloud API and Admin API v1.0 schema definition files
-  http://communities.vmware.com/docs/DOC-13564
+ vCloud API and Admin API v5.1 schema definition files
+  http://pubs.vmware.com/vcd-51/topic/com.vmware.vcloud.api.reference.doc_51/about.html
   
  VMware vCloud API Communities
   http://communities.vmware.com/community/vmtn/developer/forums/vcloudapi
+
+ VMware vCloud API Specification v1.5
+  http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/
 
 =cut
