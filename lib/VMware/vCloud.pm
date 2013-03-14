@@ -6,7 +6,7 @@ use VMware::API::vCloud;
 use VMware::vCloud::vApp;
 use strict;
 
-our $VERSION = 'v2.19';
+our $VERSION = 'v2.22';
 
 =head1 NAME
 
@@ -26,6 +26,12 @@ VMware::vCloud - VMware vCloud Director
 
 This module provides a Perl interface to VMware's vCloud Director.
 
+It's intention is to provide a high-level perl-style interface to vCloud 
+Director actions.
+
+If you are looking for a direct and low-level access to the vCloud API, you may 
+want to look at VMware::API::vCloud, which is packaged and used by this module.
+
 =head1 EXAMPLE SCRIPTS
 
 Included in the distribution of this module are several example scripts. 
@@ -37,7 +43,7 @@ way to the VIPERL SDK utilities and vghetto scripts.
 	org_get.pl - Selects a random organization and prints a Data::Dumper dump of it's information.
 	list-vapps.pl - Prints a list of all VMs the user has access to.
 
-=head1 METHODS
+=head1 MODULE METHODS
 
 =head2 new($host,$user,$pass,$org,$conf)
 
@@ -79,56 +85,54 @@ sub new {
   return $self;
 }
 
-sub _purge {
+=head2 debug(1|0)
+
+This turns debugging on and off programatically. An argument of '1' for debugging, '0'
+for no debugging.
+
+=cut
+
+sub debug {
+  my $self = shift @_;
+  my $val  = shift @_;
+  $self->{api}->{debug} = $val;
+}
+
+=head2 login()
+
+This method is deprecated and will be removed in later releases.
+
+This method roughly emulates the default login action of the API: It returns
+information on which organizations are accessible to the user.
+
+It is a synonym for list_orgs() and all details on return values should be
+take from that method's documentation.
+
+=cut
+
+sub login {
+  my $self = shift @_;
+  return $self->list_orgs(@_);
+}
+
+=head2 purge()
+
+This method clears the in-module caching of API responses.
+
+This module caches many API calls to reduce response times and load on the 
+server. This cache is automatically cleared when a method that changes the 
+status of the VCD server is called. However, there may be times when you have
+a lon running process, or wish to manually clear the cache yourself.
+
+=cut
+
+sub purge {
   our $cache->purge();
 }
 
 ### Standard methods
 
-=head3 create_external_network($name,$gateway,$netmask,$dns1,$dns2,$suffix,$vimref,$moref,$objtype)
-
-=cut
-
-sub create_external_network {
-  my $self = shift @_;
-  my $conf = shift @_;
-
-  my $xml = '
-<vmext:VMWExternalNetwork
-   xmlns:vmext="http://www.vmware.com/vcloud/extension/v1.5"
-   xmlns:vcloud="http://www.vmware.com/vcloud/v1.5"
-   name="'.$conf->{name}.'"
-   type="application/vnd.vmware.admin.vmwexternalnet+xml">
-   <vcloud:Description>ExternalNet</vcloud:Description>
-   <vcloud:Configuration>
-      <vcloud:IpScopes>
-         <vcloud:IpScope>
-            <vcloud:IsInherited>false</vcloud:IsInherited>
-            <vcloud:Gateway>'.$conf->{gateway}.'</vcloud:Gateway>
-            <vcloud:Netmask>'.$conf->{subnet}.'</vcloud:Netmask>
-            <vcloud:Dns1>'.$conf->{dns1}.'</vcloud:Dns1>
-            <vcloud:Dns2>'.$conf->{dns2}.'</vcloud:Dns2>
-            <vcloud:DnsSuffix>'.$conf->{suffix}.'</vcloud:DnsSuffix>
-            <vcloud:IpRanges>
-               <vcloud:IpRange>
-                  <vcloud:StartAddress>'.$conf->{ipstart}.'</vcloud:StartAddress>
-                  <vcloud:EndAddress>'.$conf->{ipend}.'</vcloud:EndAddress>
-               </vcloud:IpRange>
-            </vcloud:IpRanges>
-         </vcloud:IpScope>
-      </vcloud:IpScopes>
-      <vcloud:FenceMode>isolated</vcloud:FenceMode>
-   </vcloud:Configuration>
-   <vmext:VimPortGroupRef>
-      <vmext:VimServerRef
-         href="'.$conf->{vimserver}.'" />
-      <vmext:MoRef>'.$conf->{mo_ref}.'</vmext:MoRef>
-      <vmext:VimObjectType>'.$conf->{mo_type}.'</vmext:VimObjectType>
-   </vmext:VimPortGroupRef>
-</vmext:VMWExternalNetwork>';
-  
-  return $self->{api}->post($self->{api}->{learned}->{url}->{admin}.'extension/externalnets','application/vnd.vmware.admin.vmwexternalnet+xml',$xml); 
-}
+=head1 VAPP METHODS
 
 =head2 create_vapp_from_template($name,$vdcid,$tmplid,$netid)
 
@@ -240,88 +244,6 @@ my $xml = '
   return $self->{api}->post($url,'application/vnd.vmware.vcloud.instantiateVAppTemplateParams+xml',$xml);
 }
 
-=head2 get_org($orgid)
-
-Given an organization id, it returns a hash of data for that organization.
-
-=cut
-
-sub get_org {
-  my $self = shift @_;
-  my $id   = shift @_;
-
-  my $org = our $cache->get('get_org:'.$id);
-  return %$org if defined $org;
-  
-  my $raw_org_data = $self->{api}->org_get($id);
-
-  my %org;
-  $org{description} = $raw_org_data->{Description}->[0];
-  $org{href}        = $raw_org_data->{href};
-  $org{name}        = $raw_org_data->{name};
-
-  $raw_org_data->{href} =~ /([^\/]+)$/;
-  $org{id} = $1;
-
-  $org{contains} = {};
-  
-  for my $link ( @{$raw_org_data->{Link}} ) {
-    $link->{type} =~ /^application\/vnd.vmware.vcloud.(\w+)\+xml$/;
-    my $type = $1;
-
-    my $id = $link->{href};
-    
-    next if $type eq 'controlAccess';
-    
-    $org{contains}{$type}{$id} = $link->{name};
-  }
-
-  $cache->set('get_org:'.$id,\%org);
-  return %org;
-}
-
-=head2 get_template($templateid)
-
-Given an organization id, it returns a hash of data for that organization.
-
-=cut
-
-sub get_template {
-  my $self = shift @_;
-  my $id   = shift @_;
-
-  my $tmpl = our $cache->get('get_template:'.$id);
-  return %$tmpl if defined $tmpl;
-  
-  my $raw_tmpl_data = $self->{api}->template_get($id);
-
-  my %tmpl = %$raw_tmpl_data;
-
-=head foo
-  $tmpl{description} = $raw_org_data->{Description}->[0];
-  $tmpl{name}        = $raw_org_data->{name};
-
-  $raw_org_data->{href} =~ /([^\/]+)$/;
-  $org{id} = $1;
-
-  $org{contains} = {};
-  
-  for my $link ( @{$raw_org_data->{Link}} ) {
-    $link->{type} =~ /^application\/vnd.vmware.vcloud.(\w+)\+xml$/;
-    my $type = $1;
-    $link->{href} =~ /([^\/]+)$/;
-    my $id = $1;
-    
-    next if $type eq 'controlAccess';
-    
-    $org{contains}{$type}{$id} = $link->{name};
-  }
-=cut
-
-  $cache->set('get_template:'.$id,\%tmpl);
-  return %tmpl;
-}
-
 =head2 get_vapp($vappid)
 
 Given an vApp id, it returns a vApp object for that vApp.
@@ -344,9 +266,300 @@ sub get_vapp {
   return $vapp;
 }
 
-=head2 get_vdc($vdcid)
+=head2 list_vapps()
 
-Given an vDC id, it returns a hash of data for that vDC.
+This method returns a hash or hashref of Template names and IDs the user has
+access too.
+
+=cut
+
+sub list_vapps {
+  my $self  = shift @_;
+  my $vapps = our $cache->get('list_vapps:');
+  
+  unless ( defined $vapps ) {
+    my %vdcs = $self->list_vdcs();
+    
+    for my $vdcid ( keys %vdcs ) {
+      my %vdc = $self->get_vdc($vdcid);
+      for my $entity ( @{$vdc{ResourceEntities}} ) {
+        for my $name ( keys %{$entity->{ResourceEntity}} ) {
+          next unless $entity->{ResourceEntity}->{$name}->{type} eq 'application/vnd.vmware.vcloud.vApp+xml';
+          my $href = $entity->{ResourceEntity}->{$name}->{href};
+          $vapps->{$href} = $name;
+        }
+      }
+    }
+  }
+  
+  $cache->set('list_vapps:',$vapps);
+  return wantarray ? %$vapps : $vapps if defined $vapps;
+}
+
+=head1 TEMPLATE METHODS
+
+=head2 get_template($templateid)
+
+Given an organization id, it returns a hash of data for that organization.
+
+=cut
+
+sub get_template {
+  my $self = shift @_;
+  my $id   = shift @_;
+
+  my $tmpl = our $cache->get('get_template:'.$id);
+  return %$tmpl if defined $tmpl;
+  
+  my $raw_tmpl_data = $self->{api}->template_get($id);
+
+  my %tmpl = %$raw_tmpl_data;
+
+  #$tmpl{description} = $raw_org_data->{Description}->[0];
+  #$tmpl{name}        = $raw_org_data->{name};
+
+  #$raw_org_data->{href} =~ /([^\/]+)$/;
+  #$org{id} = $1;
+
+  #$org{contains} = {};
+  
+  #for my $link ( @{$raw_org_data->{Link}} ) {
+    #$link->{type} =~ /^application\/vnd.vmware.vcloud.(\w+)\+xml$/;
+    #my $type = $1;
+    #$link->{href} =~ /([^\/]+)$/;
+    #my $id = $1;
+    
+    #next if $type eq 'controlAccess';
+    
+    #$org{contains}{$type}{$id} = $link->{name};
+  #}
+
+  $cache->set('get_template:'.$id,\%tmpl);
+  return %tmpl;
+}
+
+=head2 list_templates()
+
+This method returns a hash or hashref of Template names and IDs the user has
+access too.
+
+=cut
+
+sub list_templates {
+  my $self  = shift @_;
+  
+  my $templates = our $cache->get('list_templates:');
+  return %$templates if defined $templates;
+
+  my %orgs = $self->list_orgs();
+  my %vdcs = $self->list_vdcs();
+  
+  my %templates;
+  
+  for my $vdcid ( keys %vdcs ) {
+    my %vdc = $self->get_vdc($vdcid);
+    for my $entity ( @{$vdc{ResourceEntities}} ) {
+      for my $name ( keys %{$entity->{ResourceEntity}} ) {
+        next unless $entity->{ResourceEntity}->{$name}->{type} eq 'application/vnd.vmware.vcloud.vAppTemplate+xml';
+        my $href = $entity->{ResourceEntity}->{$name}->{href};
+        $templates{$href} = $name;
+      }
+    }
+  }
+
+  $cache->set('list_templates:',\%templates);
+  return %templates;
+}
+
+=head1 ORG METHODS
+
+=head2 create_org(\%conf)
+
+=cut
+
+sub create_org {
+  my $self = shift @_;
+  my $conf = shift @_;
+  return $self->{api}->org_create($conf);
+}
+
+=head2 delete_org($org_href)
+
+Given the org HREF, call a delete on it.
+
+=cut
+
+sub delete_org {
+  my $self = shift @_;
+  my $href = shift @_;
+  return $self->{api}->delete($href);
+}
+
+=head2 delete_org_network($org_network_href)
+
+Given the org network HREF, call a delete on it.
+
+=cut
+
+sub delete_org_network {
+  my $self = shift @_;
+  my $href = shift @_;
+  return $self->{api}->delete($href);
+}
+
+=head2 disable_org($org_href)
+
+Given a Org href, call the disable action on it.
+
+=cut
+
+sub disable_org {
+  my $self = shift @_;
+  my $href = shift @_;
+  $href .= '/action/disable' unless $href =~ /\/action\/disable$/;
+  return $self->{api}->post($href,undef,'');   
+}
+
+=head2 enable_org($org_href)
+
+Given a Org href, call the enable action on it.
+
+=cut
+
+sub enable_org {
+  my $self = shift @_;
+  my $href = shift @_;
+  $href .= '/action/enable' unless $href =~ /\/action\/enable$/;
+  return $self->{api}->post($href,undef,'');   
+}
+
+=head2 get_org($org_href)
+
+Given an organization id, it returns a hash or hashref of data for that 
+organization. Returned data:
+
+  name - Name of the organization
+  description - Description field of the organization
+  href - anchor HREF for the organization in the API 
+  id - UUID identified in the href.
+  contains - A hash of contained objects
+  raw - The raw returned XML structure for the organization from the API
+  
+=cut
+
+sub get_org {
+  my $self = shift @_;
+  my $id   = shift @_;
+
+  my $org = our $cache->get('get_org:'.$id);
+  return ( wantarray ? %$org : $org ) if defined $org;
+  
+  my $raw_org_data = $self->{api}->org_get($id);
+
+  my %org;
+  $org{raw}         = $raw_org_data;
+  $org{description} = $raw_org_data->{Description}->[0];
+  $org{href}        = $raw_org_data->{href};
+  $org{name}        = $raw_org_data->{name};
+
+  $raw_org_data->{href} =~ /([^\/]+)$/;
+  $org{id} = $1;
+
+  $org{contains} = {};
+  
+  for my $link ( @{$raw_org_data->{Link}} ) {
+    $link->{type} =~ /^application\/vnd.vmware.vcloud.(\w+)\+xml$/;
+    my $type = $1;
+
+    my $id = $link->{href};
+    
+    next if $type eq 'controlAccess';
+    
+    $org{contains}{$type}{$id} = $link->{name};
+  }
+
+  $cache->set('get_org:'.$id,\%org);
+  return wantarray ? %org : \%org;
+}
+
+=head2 list_orgs()
+
+This method returns a hash or hashref of Organization names and IDs.
+
+=cut
+
+sub list_orgs {
+  my $self = shift @_;
+  my $orgs = our $cache->get('list_orgs:');
+
+  #unless ( defined $orgs ) {
+    $orgs = {};
+    my $ret = $self->{api}->org_list();
+
+    for my $orgname ( keys %{$ret->{Org}} ) {
+      warn "Org type of $ret->{Org}->{$orgname}->{type} listed for $orgname\n" unless $ret->{Org}->{$orgname}->{type} eq 'application/vnd.vmware.vcloud.org+xml';
+      $orgs->{$orgname} = $ret->{Org}->{$orgname}->{href};
+    }
+    $cache->set('list_orgs:',$orgs); 
+  #}
+  
+  return wantarray ? %$orgs : $orgs if defined $orgs;
+}
+
+=head1 ORG VDC METHODS
+
+=head2 create_vdc($org_url,$conf)
+
+=cut
+
+sub create_vdc {
+  my $self = shift @_;
+  my $href = shift @_;
+  my $conf = shift @_;
+  return $self->{api}->org_vdc_create($href,$conf);
+}  
+
+=head2 delete_vdc($vdc_href);
+
+Given the org VDC HREF, call a delete on it.
+
+=cut
+
+sub delete_vdc {
+  my $self = shift @_;
+  my $href = shift @_;
+  return $self->{api}->delete($href);
+}
+
+=head2 disable_vdc($vdc_href)
+
+Given a VDC href, call the disable action on it.
+
+=cut
+
+sub disable_vdc {
+  my $self = shift @_;
+  my $href = shift @_;
+  $href .= '/action/disable' unless $href =~ /\/action\/disable$/;
+  return $self->{api}->post($href,undef,'');   
+}
+
+=head2 enable_vdc($vdc_href)
+
+Given a VDC href, call the enable action on it.
+
+=cut
+
+sub enable_vdc {
+  my $self = shift @_;
+  my $href = shift @_;
+  $href .= '/action/enable' unless $href =~ /\/action\/enable$/;
+  return $self->{api}->post($href,undef,'');   
+}
+
+=head2 get_vdc($vdc_href)
+
+Given an VDC href, it returns a hash of data for that vDC.
 
 =cut
 
@@ -383,6 +596,65 @@ sub get_vdc {
   return %$raw_vdc_data;
 }
 
+=head2 list_vdcs() | list_vdcs($orgid)
+
+This method returns a hash or hashref of VDC names and IDs the user has
+access too.
+
+The optional argument of an $orgname will limit the returned list of VDCs in 
+that Organization.
+
+=cut
+
+sub list_vdcs {
+  my $self    = shift @_;
+  my $orgname = shift @_;
+  my $vdcs = our $cache->get("list_vdcs:$orgname:");
+
+  unless ( defined $vdcs ) {
+    $vdcs = {};
+    my %orgs = $self->list_orgs();
+    %orgs = ( $orgname => $orgs{$orgname} ) if defined $orgname; 
+    
+    for my $orgname ( keys %orgs ) {
+      my %org = $self->get_org($orgs{$orgname});
+      for my $vdcid ( keys %{$org{contains}{vdc}} ) {
+        $vdcs->{$vdcid} = $org{contains}{vdc}{$vdcid};
+      }
+    }
+  }
+
+  $cache->set("list_vdcs:$orgname:",$vdcs);
+  return wantarray ? %$vdcs : $vdcs;
+}
+
+=head1 PROVIDER VDC METHODS
+
+=head2 get_pvdc($pvdc_href)
+
+Returns a hashref of the information on the PVDC
+
+=cut
+
+sub get_pvdc {
+  my $self = shift @_;
+  my $href = shift @_;
+  return $self->{api}->pvdc_get($href);
+}
+
+=head1 NETWORK METHODS
+
+=head2 create_org_network 
+
+=cut
+
+sub create_org_network {
+  my $self = shift @_;
+  my $href = shift @_;
+  my $conf = shift @_;
+  return $self->{api}->org_network_create($href,$conf);
+}
+
 =head2 list_networks() | list_networks($vdcid)
 
 This method returns a hash or hashref of network names and IDs.
@@ -416,149 +688,169 @@ sub list_networks {
   return %networks;
 }
 
-=head2 list_orgs()
+=head1 ADMINISTRATIVE METHODS
 
-This method returns a hash or hashref of Organization names and IDs.
+=head3 admin_urls()
+
+Returns the list of administrative action URLs available to the user.
 
 =cut
 
-sub list_orgs {
+sub admin_urls {
   my $self = shift @_;
-  my $orgs = our $cache->get('list_orgs:');
-
-  #unless ( defined $orgs ) {
-    $orgs = {};
-    my $ret = $self->{api}->org_list();
-
-    for my $orgname ( keys %{$ret->{Org}} ) {
-      warn "Org type of $ret->{Org}->{$orgname}->{type} listed for $orgname\n" unless $ret->{Org}->{$orgname}->{type} eq 'application/vnd.vmware.vcloud.org+xml';
-      $orgs->{$orgname} = $ret->{Org}->{$orgname}->{href};
-    }
-    $cache->set('list_orgs:',$orgs); 
-  #}
-  
-  return wantarray ? %$orgs : $orgs if defined $orgs;
+  return $self->{api}->admin();
 }
 
-=head2 list_templates()
-
-This method returns a hash or hashref of Template names and IDs the user has
-access too.
+=head3 create_external_network($name,$gateway,$netmask,$dns1,$dns2,$suffix,$vimref,$moref,$objtype)
 
 =cut
 
-sub list_templates {
-  my $self  = shift @_;
-  
-  my $templates = our $cache->get('list_templates:');
-  return %$templates if defined $templates;
-
-  my %orgs = $self->list_orgs();
-  my %vdcs = $self->list_vdcs();
-  
-  my %templates;
-  
-  for my $vdcid ( keys %vdcs ) {
-    my %vdc = $self->get_vdc($vdcid);
-    for my $entity ( @{$vdc{ResourceEntities}} ) {
-      for my $name ( keys %{$entity->{ResourceEntity}} ) {
-        next unless $entity->{ResourceEntity}->{$name}->{type} eq 'application/vnd.vmware.vcloud.vAppTemplate+xml';
-        my $href = $entity->{ResourceEntity}->{$name}->{href};
-        $templates{$href} = $name;
-      }
-    }
-  }
-
-  $cache->set('list_templates:',\%templates);
-  return %templates;
-}
-
-=head2 list_vapps()
-
-This method returns a hash or hashref of Template names and IDs the user has
-access too.
-
-=cut
-
-sub list_vapps {
-  my $self  = shift @_;
-  my $vapps = our $cache->get('list_vapps:');
-  
-  unless ( defined $vapps ) {
-    my %vdcs = $self->list_vdcs();
-    
-    for my $vdcid ( keys %vdcs ) {
-      my %vdc = $self->get_vdc($vdcid);
-      for my $entity ( @{$vdc{ResourceEntities}} ) {
-        for my $name ( keys %{$entity->{ResourceEntity}} ) {
-          next unless $entity->{ResourceEntity}->{$name}->{type} eq 'application/vnd.vmware.vcloud.vApp+xml';
-          my $href = $entity->{ResourceEntity}->{$name}->{href};
-          $vapps->{$href} = $name;
-        }
-      }
-    }
-  }
-  
-  $cache->set('list_vapps:',$vapps);
-  return wantarray ? %$vapps : $vapps if defined $vapps;
-}
-
-=head2 list_vdcs() | list_vdcs($orgid)
-
-This method returns a hash or hashref of VDC names and IDs the user has
-access too.
-
-The optional argument of an $orgname will limit the returned list of VDCs in 
-that Organization.
-
-=cut
-
-sub list_vdcs {
-  my $self    = shift @_;
-  my $orgname = shift @_;
-  my $vdcs = our $cache->get("list_vdcs:$orgname:");
-
-  unless ( defined $vdcs ) {
-    $vdcs = {};
-    my %orgs = $self->list_orgs();
-    %orgs = ( $orgname => $orgs{$orgname} ) if defined $orgname; 
-    
-    for my $orgname ( keys %orgs ) {
-      my %org = $self->get_org($orgs{$orgname});
-      for my $vdcid ( keys %{$org{contains}{vdc}} ) {
-        $vdcs->{$vdcid} = $org{contains}{vdc}{$vdcid};
-      }
-    }
-  }
-
-  $cache->set("list_vdcs:$orgname:",$vdcs);
-  return wantarray ? %$vdcs : $vdcs;
-}
-
-=head2 login()
-
-This method is deprecated and will be removed in later releases.
-
-This method roughly emulates the default login action of the API: It returns
-information on which organizations are accessible to the user.
-
-It is a synonym for list_orgs() and all details on return values should be
-take from that method's documentation.
-
-=cut
-
-sub login {
+sub create_external_network {
   my $self = shift @_;
-  return $self->list_orgs(@_);
+  my $conf = shift @_;
+
+  my $xml = '
+<vmext:VMWExternalNetwork
+   xmlns:vmext="http://www.vmware.com/vcloud/extension/v1.5"
+   xmlns:vcloud="http://www.vmware.com/vcloud/v1.5"
+   name="'.$conf->{name}.'"
+   type="application/vnd.vmware.admin.vmwexternalnet+xml">
+   <vcloud:Description>ExternalNet</vcloud:Description>
+   <vcloud:Configuration>
+      <vcloud:IpScopes>
+         <vcloud:IpScope>
+            <vcloud:IsInherited>false</vcloud:IsInherited>
+            <vcloud:Gateway>'.$conf->{gateway}.'</vcloud:Gateway>
+            <vcloud:Netmask>'.$conf->{subnet}.'</vcloud:Netmask>
+            <vcloud:Dns1>'.$conf->{dns1}.'</vcloud:Dns1>
+            <vcloud:Dns2>'.$conf->{dns2}.'</vcloud:Dns2>
+            <vcloud:DnsSuffix>'.$conf->{suffix}.'</vcloud:DnsSuffix>
+            <vcloud:IpRanges>
+               <vcloud:IpRange>
+                  <vcloud:StartAddress>'.$conf->{ipstart}.'</vcloud:StartAddress>
+                  <vcloud:EndAddress>'.$conf->{ipend}.'</vcloud:EndAddress>
+               </vcloud:IpRange>
+            </vcloud:IpRanges>
+         </vcloud:IpScope>
+      </vcloud:IpScopes>
+      <vcloud:FenceMode>isolated</vcloud:FenceMode>
+   </vcloud:Configuration>
+   <vmext:VimPortGroupRef>
+      <vmext:VimServerRef
+         href="'.$conf->{vimserver}.'" />
+      <vmext:MoRef>'.$conf->{mo_ref}.'</vmext:MoRef>
+      <vmext:VimObjectType>'.$conf->{mo_type}.'</vmext:VimObjectType>
+   </vmext:VimPortGroupRef>
+</vmext:VMWExternalNetwork>';
+  
+  return $self->{api}->post($self->{api}->{learned}->{url}->{admin}.'extension/externalnets','application/vnd.vmware.admin.vmwexternalnet+xml',$xml); 
+}
+
+=head3 extensions()
+
+Returns the data structure for the admin extensions available.
+
+=cut
+
+sub extensions {
+  my $self = shift @_;
+  return $self->{api}->admin_extension_get();
+}
+
+=head3 list_external_networks()
+
+Returns a hash or hasref of all available external networks.
+
+=cut
+
+sub list_external_networks {
+  my $self = shift @_;  
+  my $extensions = $self->extensions();
+
+  my $extnet_url;
+  for my $link ( @{$extensions->{'vcloud:Link'}} ) {
+    $extnet_url = $link->{href} if $link->{type} eq 'application/vnd.vmware.admin.vmwExternalNetworkReferences+xml';
+  }
+
+  my $ret = $self->{api}->get($extnet_url);
+  my $externals = $ret->{'vmext:ExternalNetworkReference'};
+  
+  return wantarray ? %$externals : $externals;
+}
+
+=head3 list_portgroups()
+
+Returns a hash or hashref of available portgroups on the first associated 
+vcenter server.
+
+=cut
+
+sub list_portgroups {
+  my $self = shift @_;
+  my $query = $self->{api}->get('https://'. our $host .'/api/query?type=portgroup&pageSize=250');
+  my %portgroups = %{$query->{PortgroupRecord}};
+  return wantarray ? %portgroups : \%portgroups;
+}
+
+=head3 vimserver()
+
+Returns a reference to the first associated vcenter server.
+
+=cut
+
+sub vimserver {
+  my $self = shift @_;
+  my $ret = $self->{api}->admin_extension_vimServerReferences_get();
+  my $vims = $ret->{'vmext:VimServerReference'};
+  my $vim = ( keys %$vims )[0];
+  my $vimserver_href = $vims->{$vim}->{href};
+  return $self->{api}->admin_extension_vimServer_get($vimserver_href);
+}
+
+=head3 webclienturl($type,$moref)
+
+Give the vimserver type and managed object reference, this method returns the 
+URL for viewing the object via the vSphere Web client. This is handy for finding
+further details on objects within vSphere.
+
+=cut
+
+sub webclienturl {
+  my $self  = shift @_;
+  my $type  = shift @_;
+  my $moref = shift @_;
+
+  my $ret = $self->{api}->admin_extension_vimServerReferences_get();
+  my $vims = $ret->{'vmext:VimServerReference'};
+  my $vim = ( keys %$vims )[0];
+  my $vimserver_href = $vims->{$vim}->{href};
+    
+  my $urlrequest = $vimserver_href .'/'. $type .'/'. $moref .'/vSphereWebClientUrl';
+  return $urlrequest;
 }
 
 1;
 
 __END__
 
+=head1 NOTES
+
+=head2 ID VERSUS HREF
+
+Tl;DR - Use HREFs and not IDs.
+
+Internally, objects are identified in the vCloud Director API via either an
+UUID or a HREF that references that object.
+
+According to the API documentation, (as of 5.1) UUIDs are not guaranteed to 
+always be consistent between connections, but HREFs are considered permanent.
+
+Consequently, it is considered a best practice to use HREFs as the unique 
+identifier of an object. This module implements this best practice.
+
 =head1 VERSION
 
-  Version: v2.19 (2013/03/13)
+  Version: v2.22 (2013/03/14)
 
 =head1 AUTHOR
 
