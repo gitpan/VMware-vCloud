@@ -6,7 +6,7 @@ use VMware::API::vCloud;
 use VMware::vCloud::vApp;
 use strict;
 
-our $VERSION = 'v2.22';
+our $VERSION = 'v2.26';
 
 =head1 NAME
 
@@ -278,7 +278,7 @@ sub list_vapps {
   my $vapps = our $cache->get('list_vapps:');
   
   unless ( defined $vapps ) {
-    my %vdcs = $self->list_vdcs();
+    my %vdcs = $self->list_vdcs($self->{'api'}{'orgname'});
     
     for my $vdcid ( keys %vdcs ) {
       my %vdc = $self->get_vdc($vdcid);
@@ -352,7 +352,7 @@ sub list_templates {
   return %$templates if defined $templates;
 
   my %orgs = $self->list_orgs();
-  my %vdcs = $self->list_vdcs();
+  my %vdcs = $self->list_vdcs($self->{'api'}{'orgname'});
   
   my %templates;
   
@@ -464,6 +464,8 @@ sub get_org {
 
   $raw_org_data->{href} =~ /([^\/]+)$/;
   $org{id} = $1;
+
+  $org{vdcs} = $raw_org_data->{Vdcs}->[0]->{Vdc};
 
   $org{contains} = {};
   
@@ -609,6 +611,7 @@ that Organization.
 sub list_vdcs {
   my $self    = shift @_;
   my $orgname = shift @_;
+  $orgname = undef if $orgname eq 'System'; # Show all if the org is System
   my $vdcs = our $cache->get("list_vdcs:$orgname:");
 
   unless ( defined $vdcs ) {
@@ -645,6 +648,36 @@ sub get_pvdc {
 =head1 NETWORK METHODS
 
 =head2 create_org_network 
+
+Create an org network
+
+The conf hash reference can contain:
+
+=over 4
+
+=item * name
+
+=item * desc
+
+=item * gateway
+
+=item * netmask
+
+=item * dns1
+
+=item * dns2
+
+=item * dnssuffix
+
+=item * is_enabled
+
+=item * is_shared
+
+=item * start_ip
+
+=item * end_ip
+
+=back
 
 =cut
 
@@ -850,7 +883,7 @@ identifier of an object. This module implements this best practice.
 
 =head1 VERSION
 
-  Version: v2.22 (2013/03/14)
+  Version: v2.26 (2013/03/19)
 
 =head1 AUTHOR
 

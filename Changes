@@ -2,13 +2,26 @@ Revision history for VMware::vCloud
 
 NB: Skipped version numbers were never released.
 
-v2.22 2013/03/14
+v2.26 2013/03/19
 
   Added:
-	VMware::vCloud - admin_urls(), debug(), delete_org(), delete_org_network(), 
-	  delete_vdc(), disable_org(), disable_vdc(), enable_org(), enable_vdc(), 
-	  extensions(), get_pvdc(), list_external_networks(), list_portgroups(), 
-	  purge(), vimserver(), webclienturl()
+    VMware::API::vCloud - template_get_metadata(), vapp_get_metadata()
+    VMware::API::vCloud - Started adding API documentation URLs as comments in 
+                          front of each method.
+
+  Improved:
+    VMware::vCloud - list_vapps() & list_templates() - Now uses the current login 
+      org a a parameter to list_vapps() to avoid pemission errors when logged in 
+      as an Org Admin.
+    VMware::vCloud - org_create() improved POD, added ldap_mode as a parameter.
+
+2.22 2013/03/14
+
+  Added:
+    VMware::vCloud - admin_urls(), debug(), delete_org(), delete_org_network(), 
+      delete_vdc(), disable_org(), disable_vdc(), enable_org(), enable_vdc(), 
+      extensions(), get_pvdc(), list_external_networks(), list_portgroups(), 
+      purge(), vimserver(), webclienturl()
 
   Improved:
     VMware::vCloud - get_org() - now returns hash or hashref depending on context.

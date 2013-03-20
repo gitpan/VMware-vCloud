@@ -5,7 +5,7 @@ use LWP;
 use XML::Simple;
 use strict;
 
-our $VERSION = 'v2.22';
+our $VERSION = 'v2.26';
 
 =head1 NAME
 
@@ -481,9 +481,32 @@ sub catalog_get {
 
 =head2 org_create($name,$desc,$fullname,$is_enabled)
 
-Create an organization?
+Create an organization.
+
+=over 4
+
+=item * name
+
+=item * desc
+
+=item * fullname
+
+=item * is_enabled
+
+=item * can_publish
+
+=item * deployed
+
+=item * stored
+
+=item * ldap_mode: NONE, SYSTEM or CUSTOM - Custom requires further parameters not implemented yet. Default is NONE
+
+=back
 
 =cut
+
+# http://pubs.vmware.com/vcd-51/topic/com.vmware.vcloud.api.doc_51/GUID-439C57EA-859C-423C-B21B-22B230395600.html
+# http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/operations/PUT-Organization.html
 
 sub org_create {
   my $self = shift @_;
@@ -491,14 +514,16 @@ sub org_create {
 
   $self->_debug("API: org_create()\n") if $self->{debug};
   my $url = $self->{learned}->{url}->{admin} . 'orgs';
+
+  $conf->{ldap_mode} = 'NONE' unless defined $conf->{ldap_mode};
   
   my $vdcs;  
-  if ( defined $conf->{pvdc} and ref $conf->{pvdc} ) {
-    for my $pvdc (@{$conf->{pvdc}}) {
-      $vdcs .= '<Vdc href="'.$pvdc.'"/> ';
+  if ( defined $conf->{vdc} and ref $conf->{vdc} ) {
+    for my $vdc (@{$conf->{vdc}}) {
+      $vdcs .= '<Vdc href="'.$vdc.'"/> ';
     }
-  } elsif ( defined $conf->{pvdc} ) {
-      $vdcs = '<Vdc href="'.$conf->{pvdc}.'"/> ';
+  } elsif ( defined $conf->{vdc} ) {
+      $vdcs = '<Vdc href="'.$conf->{vdc}.'"/> ';
   }
   $vdcs .= "\n";
   
@@ -509,12 +534,15 @@ sub org_create {
   <IsEnabled>'.$conf->{is_enabled}.'</IsEnabled>  
     <Settings>
         <OrgGeneralSettings>
-            <CanPublishCatalogs>true</CanPublishCatalogs>
-            <DeployedVMQuota>10</DeployedVMQuota>
-            <StoredVmQuota>15</StoredVmQuota>
+            <CanPublishCatalogs>'.$conf->{can_publish}.'</CanPublishCatalogs>
+            <DeployedVMQuota>'.$conf->{deployed}.'</DeployedVMQuota>
+            <StoredVmQuota>'.$conf->{stored}.'</StoredVmQuota>
             <UseServerBootSequence>false</UseServerBootSequence>
             <DelayAfterPowerOnSeconds>1</DelayAfterPowerOnSeconds>
         </OrgGeneralSettings>
+        <OrgLdapSettings>
+          <OrgLdapMode>'.$conf->{ldap_mode}.'</OrgLdapMode>
+        </OrgLdapSettings>
     </Settings>
     <Vdcs>
       '.$vdcs.'
@@ -596,6 +624,8 @@ The conf hash reference can contain:
 
 =item * is_enabled
 
+=item * is_shared
+
 =item * start_ip
 
 =item * end_ip
@@ -608,7 +638,9 @@ sub org_network_create {
   my $self = shift @_;
   my $url  = shift @_;
   my $conf = shift @_;
-  
+
+  $conf->{is_shared} = 0 unless defined $conf->{is_shared};  
+
   $self->_debug("API: org_network_create()\n") if $self->{debug};
   
 #  my $xml = '
@@ -648,6 +680,7 @@ sub org_network_create {
          href="'.$conf->{parent_net_href}.'" />
       <FenceMode>bridged</FenceMode>
    </Configuration>
+  <IsShared>'.$conf->{is_shared}.'</IsShared>
 </OrgVdcNetwork>';
 
   $url .= '/networks';
@@ -818,6 +851,8 @@ It returns the requested template.
 
 =cut
 
+# http://pubs.vmware.com/vcd-51/index.jsp?topic=%2Fcom.vmware.vcloud.api.reference.doc_51%2Fdoc%2Foperations%2FGET-VAppTemplate.html
+
 sub template_get {
   my $self = shift @_;
   my $tmpl = shift @_;
@@ -836,6 +871,29 @@ sub template_get {
   my $response = $self->{ua}->request($req);
   return $self->_xml_response($response);
 }
+
+=head2 template_get_metadata($tmpl_href)
+
+Returns the response for metadata for the given template href.
+
+HREF example: http://example.vcd.server/api/vAppTemplate/{uuid}
+
+=cut
+
+# http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/operations/GET-VAppTemplateMetadata.html
+
+sub template_get_metadata {
+  my $self = shift @_;
+  my $href = shift @_;  
+  $self->_debug("API: template_get_metadata($href)\n") if $self->{debug};
+
+  my $req = HTTP::Request->new( GET => $href . '/metadata' );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);
+}
+
 
 =head2 vdc_get($vdcid or $vdcurl)
 
@@ -881,7 +939,7 @@ sub vdc_list {
   return $self->_xml_response($response);
 }
 
-=head2 vapp_get($vappid or $vappurl)
+=head2 vapp_get($vappid or $vapp_href)
 
 As a parameter, this method thakes the raw numeric id of the vApp or the full URL.
 
@@ -907,6 +965,29 @@ sub vapp_get {
   my $response = $self->{ua}->request($req);
   return $self->_xml_response($response);
 }
+
+=head2 vapp_get_metadata($vapp_href)
+
+Returns the response for metadata for the given vApp href.
+
+HREF example: http://example.vcd.server/api/vApp/{uuid}
+
+=cut
+
+# http://pubs.vmware.com/vcd-51/index.jsp?topic=%2Fcom.vmware.vcloud.api.reference.doc_51%2Fdoc%2Foperations%2FGET-VAppMetadata.html
+
+sub vapp_get_metadata {
+  my $self = shift @_;
+  my $href = shift @_;  
+  $self->_debug("API: vapp_get_metadata($href)\n") if $self->{debug};
+
+  my $req = HTTP::Request->new( GET => $href . '/metadata' );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);
+}
+
 
 1;
 
@@ -940,7 +1021,7 @@ dearly love a few changes, that might help things:
 
 =head1 VERSION
 
-  Version: v2.22 (2013/03/14)
+  Version: v2.26 (2013/03/19)
 
 =head1 AUTHOR
 
