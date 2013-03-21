@@ -3,7 +3,7 @@ TODO!
 These items are goals and plans for the future for this module. They recognize
 deficiencies and inefficiencies in the current module:
 
-- Move away from hard-coded v1.0 of API
+- org_create leases are hard coded. This needs to be fixed.
 
 - Support all methods. :)
 

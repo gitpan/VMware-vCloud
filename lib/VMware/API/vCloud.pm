@@ -5,7 +5,10 @@ use LWP;
 use XML::Simple;
 use strict;
 
-our $VERSION = 'v2.26';
+our $VERSION = 'v2.27';
+
+# ADMIN OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-admin_operations.html
+# USER OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-user_operations.html
 
 =head1 NAME
 
@@ -451,6 +454,48 @@ sub admin_extension_vimServerReferences_get {
   return $self->_xml_response($response);  
 }
 
+=head2 catalog_create($org_href,$conf)
+
+$conf is a hashref that can contain:
+
+=over 4
+
+=item * name
+
+=item * description
+
+=item * is_published
+
+=back
+
+Org HREF example: http://example.vcd.server/api/admin/org/{id}
+
+=cut
+
+# http://pubs.vmware.com/vcd-51/index.jsp?topic=%2Fcom.vmware.vcloud.api.reference.doc_51%2Fdoc%2Foperations%2FPOST-CreateCatalog.html
+
+# Add catalog item http://pubs.vmware.com/vcd-51/index.jsp?topic=%2Fcom.vmware.vcloud.api.reference.doc_51%2Fdoc%2Foperations%2FPOST-CreateCatalogItem.html
+
+sub catalog_create {
+  my $self = shift @_;
+  my $url  = shift @_;
+  my $conf = shift @_;
+  
+  $conf->{is_published} = 0 unless defined $conf->{is_published};
+
+  $url .= '/catalogs' unless $url =~ /\/catalogs$/;
+  $self->_debug("API: catalog_create($url)\n") if $self->{debug};
+
+  my $xml = '<AdminCatalog xmlns="http://www.vmware.com/vcloud/v1.5" name="'.$conf->{name}.'">
+   <Description>'.$conf->{description}.'</Description>
+   <IsPublished>'.$conf->{is_published}.'</IsPublished>
+</AdminCatalog>';
+
+  my $ret = $self->post($url,'application/vnd.vmware.admin.catalog+xml',$xml);
+
+  return $ret->[2]->{href} if $ret->[1] == 201;
+  return $ret;
+}
 
 =head2 catalog_get($catid or $caturl)
 
@@ -477,6 +522,74 @@ sub catalog_get {
 
   my $response = $self->{ua}->request($req);
   return $self->_xml_response($response);
+}
+
+=head2 catalog_get_access($cat_href,$org_href)
+
+HREF example: http://example.vcd.server/api/org/{id}/catalog/{catalogId}/action/controlAccess
+
+=cut
+
+# http://pubs.vmware.com/vcd-51/index.jsp?topic=%2Fcom.vmware.vcloud.api.reference.doc_51%2Fdoc%2Ftypes%2FControlAccessParamsType.html
+
+sub catalog_get_access {
+  my $self = shift @_;
+  my $cat_href = shift @_;
+  my $org_href = shift @_;
+  
+  die 'Bad Catalog HREF' unless $cat_href =~ /(\/catalog\/[^\/]+)$/;
+  my $href = $org_href . $1 . '/controlAccess';
+  $href =~ s/admin\///;
+  
+  $self->_debug("API: catalog_get_access($href)\n") if $self->{debug};
+  
+  my $req = HTTP::Request->new( GET => $href );
+  $req->header( Accept => $self->{learned}->{accept_header} );
+
+  my $response = $self->{ua}->request($req);
+  return $self->_xml_response($response);
+}
+
+=head2 catalog_set_access($cat_href,$org_href,$is_shared,$level)
+
+The sets the "organizational" sharing for a catalog.
+
+=over 4
+
+=item * is_shared - 1 or 0
+
+=item * level - one of: FullControl, Change, ReadOnly
+
+=back
+
+HREF example: http://example.vcd.server/api/org/{id}/catalog/{catalogId}/action/controlAccess
+
+=cut
+
+# http://pubs.vmware.com/vcd-51/index.jsp?topic=%2Fcom.vmware.vcloud.api.reference.doc_51%2Fdoc%2Ftypes%2FControlAccessParamsType.html
+
+sub catalog_set_access {
+  my $self = shift @_;
+  my $cat_href = shift @_;
+  my $org_href = shift @_;
+  my $is_shared = shift @_;
+  my $level = shift @_;
+
+  die 'Bad Catalog HREF' unless $cat_href =~ /(\/catalog\/[^\/]+)$/;
+  my $href = $org_href . $1 . '/action/controlAccess';
+  $href =~ s/admin\///;  
+
+  $self->_debug("API: catalog_set_access($href)\n") if $self->{debug};
+  
+  my $xml = '<ControlAccessParams xmlns="http://www.vmware.com/vcloud/v1.5">
+    <IsSharedToEveryone>'.$is_shared.'</IsSharedToEveryone>
+    <EveryoneAccessLevel>'.$level.'</EveryoneAccessLevel>
+</ControlAccessParams>';
+
+  my $ret = $self->post($href,'application/vnd.vmware.vcloud.controlAccess+xml',$xml);
+
+  return $ret->[2]->{href} if $ret->[1] == 201;
+  return $ret;
 }
 
 =head2 org_create($name,$desc,$fullname,$is_enabled)
@@ -516,6 +629,17 @@ sub org_create {
   my $url = $self->{learned}->{url}->{admin} . 'orgs';
 
   $conf->{ldap_mode} = 'NONE' unless defined $conf->{ldap_mode};
+
+  my $vapp_lease = '<VAppLeaseSettings>
+            <DeleteOnStorageLeaseExpiration>0</DeleteOnStorageLeaseExpiration>
+            <DeploymentLeaseSeconds>0</DeploymentLeaseSeconds>
+            <StorageLeaseSeconds>0</StorageLeaseSeconds>
+        </VAppLeaseSettings>';
+
+  my $tmpl_lease = '<VAppTemplateLeaseSettings>
+            <DeleteOnStorageLeaseExpiration>0</DeleteOnStorageLeaseExpiration>
+            <StorageLeaseSeconds>0</StorageLeaseSeconds>
+        </VAppTemplateLeaseSettings>';
   
   my $vdcs;  
   if ( defined $conf->{vdc} and ref $conf->{vdc} ) {
@@ -540,6 +664,8 @@ sub org_create {
             <UseServerBootSequence>false</UseServerBootSequence>
             <DelayAfterPowerOnSeconds>1</DelayAfterPowerOnSeconds>
         </OrgGeneralSettings>
+        '.$vapp_lease.'
+        '.$tmpl_lease.'
         <OrgLdapSettings>
           <OrgLdapMode>'.$conf->{ldap_mode}.'</OrgLdapMode>
         </OrgLdapSettings>
@@ -1021,7 +1147,7 @@ dearly love a few changes, that might help things:
 
 =head1 VERSION
 
-  Version: v2.26 (2013/03/19)
+  Version: v2.27 (2013/03/20)
 
 =head1 AUTHOR
 
@@ -1029,7 +1155,11 @@ dearly love a few changes, that might help things:
 
 =head1 CONTRIBUTIONS
 
-  stu41j - http://communities.vmware.com/people/stu42j
+A strong thanks to all people who have helped me with direction, ideas, patches
+and other such items.
+
+  Dave Gress, <dgress@vmware.com> - Handling org admin issues and metadata
+  Stuart Johnston, <sjohnston@cpan.org> - authentication and XML on API v1.0
 
 =head1 DEPENDENCIES
 

@@ -2,7 +2,15 @@ Revision history for VMware::vCloud
 
 NB: Skipped version numbers were never released.
 
-v2.26 2013/03/19
+v2.27 2013/03/20
+
+  Added:
+    Acknowledgement of David Gress as a contributor.
+    VMware::vCloud - create_catalog(), delete_catalog()
+    VMware::API::vCloud - catalog_create(), catalog_get_access(),
+      catalog_set_access()
+    
+2.26 2013/03/19
 
   Added:
     VMware::API::vCloud - template_get_metadata(), vapp_get_metadata()

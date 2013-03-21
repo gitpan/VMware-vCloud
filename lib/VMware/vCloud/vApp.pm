@@ -3,7 +3,7 @@ package VMware::vCloud::vApp;
 use Data::Dumper;
 use strict;
 
-our $VERSION = 'v2.26';
+our $VERSION = 'v2.27';
 
 =head1 NAME
 
@@ -97,7 +97,7 @@ __END__
 
 =head1 VERSION
 
-  Version: v2.26 (2013/03/19)
+  Version: v2.27 (2013/03/20)
 
 =head1 AUTHOR
 
