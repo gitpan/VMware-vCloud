@@ -6,7 +6,7 @@ use VMware::API::vCloud;
 use VMware::vCloud::vApp;
 use strict;
 
-our $VERSION = 'v2.27';
+our $VERSION = 'v2.29';
 
 =head1 NAME
 
@@ -83,6 +83,11 @@ sub new {
   $self->{raw_login_data} = $self->{api}->login();
 
   return $self;
+}
+
+sub DESTROY {
+  my $self = shift @_;
+  $self->{api}->logout() if defined $self->{api}->{have_session} and $self->{api}->{have_session} > 0;
 }
 
 =head2 debug(1|0)
@@ -931,7 +936,7 @@ identifier of an object. This module implements this best practice.
 
 =head1 VERSION
 
-  Version: v2.27 (2013/03/20)
+  Version: v2.29 (2013/03/25)
 
 =head1 AUTHOR
 

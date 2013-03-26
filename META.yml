@@ -2,7 +2,7 @@ abstract:     VMware vCloud API
 installdirs:  site
 license:      perl
 name:         VMware-vCloud
-version:      v2.27
+version:      v2.29
 version_from: lib/VMware/vCloud.pm
 
 requires:

@@ -2,13 +2,16 @@ Revision history for VMware::vCloud
 
 NB: Skipped version numbers were never released.
 
-v2.27 2013/03/20
+v2.29 2013/03/25
 
   Added:
     Acknowledgement of David Gress as a contributor.
     VMware::vCloud - create_catalog(), delete_catalog()
     VMware::API::vCloud - catalog_create(), catalog_get_access(),
-      catalog_set_access()
+      catalog_set_access(), logout()*
+	VMware::API::vCloud - POD noting the LoginUrl error.
+
+  * Provided by David Gress
     
 2.26 2013/03/19
 
