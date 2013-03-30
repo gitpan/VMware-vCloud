@@ -6,7 +6,7 @@ use VMware::API::vCloud;
 use VMware::vCloud::vApp;
 use strict;
 
-our $VERSION = 'v2.29';
+our $VERSION = 'v2.32';
 
 =head1 NAME
 
@@ -648,7 +648,7 @@ sub get_vdc {
   }
   
   $cache->set('get_vdc:'.$id,$raw_vdc_data);
-  return %$raw_vdc_data;
+  return wantarray ? %$raw_vdc_data : $raw_vdc_data;
 }
 
 =head2 list_vdcs() | list_vdcs($orgid)
@@ -696,6 +696,27 @@ sub get_pvdc {
   my $self = shift @_;
   my $href = shift @_;
   return $self->{api}->pvdc_get($href);
+}
+
+=head2 list_pvdcs()
+
+Returns a hashref of the information on available PVDCs
+
+=cut
+
+sub list_pvdcs {
+  my $self = shift @_;
+  my $href = shift @_;
+
+  my $admin_urls = $self->admin_urls();
+  my $pvdcs = {};
+  
+  for my $name ( keys %{$admin_urls->{pvdcs}} ) {
+    my $href = $admin_urls->{pvdcs}->{$name}->{href};
+    $pvdcs->{$href} = $name;
+  }
+  
+  return wantarray ? %$pvdcs : $pvdcs;
 }
 
 =head1 NETWORK METHODS
@@ -772,6 +793,74 @@ sub list_networks {
 
   $cache->set("list_networks:$vdcid:",\%networks);
   return %networks;
+}
+
+=head1 TASKS
+
+=head3 get_task($href)
+
+Returns a hash or hashref of the given task.
+
+Contents include: (but aren't limited to)
+
+* href
+* operation
+* expiryTime
+* startTime
+* Progress
+* operationName
+* operation
+* status
+
+=cut
+
+sub get_task {
+  my $self = shift @_;
+  my $href = shift @_;
+  return $self->{api}->task_get($href);
+}
+
+=head3 wait_on_task($href)
+
+Given a task href, this method will query the task every second, and only
+return once the task is completed.
+
+Specifically, this method will block and continue to query the task while it 
+has any of the following statuses:
+
+* queued - The task has been queued for execution.
+* preRunning - The task is awaiting preprocessing or administrative action.
+* running - The task is running.
+
+Any of the following statuses will cause this method to return:
+
+* success - The task completed with a status of success.
+* error - The task encountered an error while running.
+* cancelled - The task was canceled by the owner or an administrator.
+* aborted - The task was aborted by an administrative action.
+
+The return value will be and array or arrayref composed of two elements:
+
+* The status code returned by the server
+* A hashref comprising the most recently retrived for of the task object. IE:
+the same output as get_task()
+
+=cut
+
+sub wait_on_task {
+  my $self = shift @_;
+  my $href = shift @_;  
+
+  my $task = $self->get_task($href);
+  my $status = $task->{status};
+  
+  while ( $status eq 'queued' or $status eq 'preRunning' or $status eq 'running' ) {
+    sleep 1;
+    $task = $self->get_task($href);
+    $status = $task->{status};
+  }  
+
+  return wantarray ? ( $status, $task ) : [ $status, $task ];
 }
 
 =head1 ADMINISTRATIVE METHODS
@@ -936,7 +1025,7 @@ identifier of an object. This module implements this best practice.
 
 =head1 VERSION
 
-  Version: v2.29 (2013/03/25)
+  Version: v2.32 (2013-03-29)
 
 =head1 AUTHOR
 
