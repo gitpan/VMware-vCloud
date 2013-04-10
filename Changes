@@ -2,7 +2,18 @@ Revision history for VMware::vCloud
 
 NB: Skipped version numbers were never released.
 
-v2.32 2013-03-29
+
+v2.34 2013-04-09
+
+  Added:
+    VMware::vCloud - delete_vapp(), create_vapp_from_sources()
+    VMware::API::vCloud - vapp_create_from_sources(), vapp_create_from_template()
+
+  Improved:
+    Error's now die() with the returned "message" as well as the HTTP code.
+    VMware::vCloud - Cache is automatically purged on delete actions.
+  
+2.32 2013-03-29
 
   Added:
     VMware::vCloud - get_task(), list_pvdcs(), wait_on_task()
