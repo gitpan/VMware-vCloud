@@ -5,7 +5,7 @@ use LWP;
 use XML::Simple;
 use strict;
 
-our $VERSION = 'v2.34';
+our $VERSION = 'v2.35';
 
 # ADMIN OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-admin_operations.html
 # USER OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-user_operations.html
@@ -1543,7 +1543,7 @@ dearly love a few changes, that might help things:
 
 =head1 VERSION
 
-  Version: v2.34 (2013-04-09)
+  Version: v2.35 (2013-04-09)
 
 =head1 AUTHOR
 
