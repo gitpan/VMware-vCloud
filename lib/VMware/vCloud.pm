@@ -6,7 +6,7 @@ use VMware::API::vCloud;
 use VMware::vCloud::vApp;
 use strict;
 
-our $VERSION = 'v2.360';
+our $VERSION = 'v2.370';
 
 =head1 NAME
 
@@ -79,7 +79,7 @@ sub new {
 
   our $cache = new Cache::Bounded;
 
-  $self->{api} = new VMware::API::vCloud (our $host, our $user, our $pass, our $org, our $conf);
+  $self->{api} = new VMware::API::vCloud ($host,$user,$pass,$org,$conf);
   $self->{raw_login_data} = $self->{api}->login();
 
   return $self;
@@ -316,7 +316,7 @@ sub get_template {
   #}
 
   $cache->set('get_template:'.$id,\%tmpl);
-  return %tmpl;
+  return ( wantarray ? %tmpl : \%tmpl );
 }
 
 =head2 list_templates()
@@ -1006,7 +1006,7 @@ identifier of an object. This module implements this best practice.
 
 =head1 VERSION
 
-  Version: v2.360 (2013-04-09)
+  Version: v2.370 (2013-04-15)
 
 =head1 AUTHOR
 
