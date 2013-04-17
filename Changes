@@ -2,6 +2,20 @@ Revision history for VMware::vCloud
 
 NB: Skipped version numbers were never released.
 
+v2.380 2013-04-17
+
+  Added:
+    examples/get-template.pl
+
+  Improved:
+    examples/list-templates.pl - Better variable names for the example.
+    Added 'Which "name" is which' to POD on VMware::API::vCloud
+
+  Fixed:
+    VMware::API::vCloud - template_get(), vdc_get() - Missing match target on ternary.*
+ 
+  * Problem found by David Gress
+
 v2.370 2013-04-15
 
   Added:

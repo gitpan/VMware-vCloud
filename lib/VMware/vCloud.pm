@@ -6,7 +6,7 @@ use VMware::API::vCloud;
 use VMware::vCloud::vApp;
 use strict;
 
-our $VERSION = 'v2.370';
+our $VERSION = 'v2.380';
 
 =head1 NAME
 
@@ -1006,7 +1006,7 @@ identifier of an object. This module implements this best practice.
 
 =head1 VERSION
 
-  Version: v2.370 (2013-04-15)
+  Version: v2.380 (2013-04-17)
 
 =head1 AUTHOR
 
