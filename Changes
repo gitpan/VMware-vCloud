@@ -2,6 +2,11 @@ Revision history for VMware::vCloud
 
 NB: Skipped version numbers were never released.
 
+v2.400 2013-05-03
+
+  Improved:
+    All examples are now actually bundled with distribution.
+
 v2.390 2013-05-03
 
   Added:

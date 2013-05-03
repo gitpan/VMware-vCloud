@@ -1,12 +1,12 @@
 package VMware::vCloud;
 
+use strict;
 use Cache::Bounded;
 use Data::Dumper;
 use VMware::API::vCloud;
 use VMware::vCloud::vApp;
-use strict;
 
-our $VERSION = 'v2.390';
+our $VERSION = 'v2.400';
 
 =head1 NAME
 
@@ -1054,7 +1054,7 @@ identifier of an object. This module implements this best practice.
 
 =head1 VERSION
 
-  Version: v2.390 (2013-05-03)
+  Version: v2.400 (2013-05-03)
 
 =head1 AUTHOR
 
