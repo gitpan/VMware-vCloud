@@ -5,7 +5,7 @@ use LWP;
 use XML::Simple;
 use strict;
 
-our $VERSION = 'v2.380';
+our $VERSION = 'v2.390';
 
 # ADMIN OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-admin_operations.html
 # USER OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-user_operations.html
@@ -644,6 +644,20 @@ sub catalog_set_access {
 
   return $ret->[2]->{href} if $ret->[1] == 201;
   return $ret;
+}
+
+=head2 datastore_list()
+
+Connect to the System group for this query to work.
+
+Returns a hash(ref) or datastore information.
+
+=cut
+
+sub datastore_list {
+  my $self = shift @_;
+  my $query_url = $self->{learned}->{url}->{query} . '?type=datastore&format=idrecords';
+  return $self->get($query_url);
 }
 
 =head2 org_create($name,$desc,$fullname,$is_enabled)
@@ -1490,7 +1504,7 @@ dearly love a few changes, that might help things:
 
 =head1 VERSION
 
-  Version: v2.380 (2013-04-17)
+  Version: v2.390 (2013-05-03)
 
 =head1 AUTHOR
 

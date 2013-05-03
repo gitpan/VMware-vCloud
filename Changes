@@ -2,6 +2,13 @@ Revision history for VMware::vCloud
 
 NB: Skipped version numbers were never released.
 
+v2.390 2013-05-03
+
+  Added:
+    examples/list-datastores.pl
+    VMware::vCloud - list_datastores(), progress_of_task()
+    VMware::API::vCloud - datastore_list()
+
 v2.380 2013-04-17
 
   Added:
@@ -10,6 +17,7 @@ v2.380 2013-04-17
   Improved:
     examples/list-templates.pl - Better variable names for the example.
     Added 'Which "name" is which' to POD on VMware::API::vCloud
+    Using Term::Prompt to ask for auth on example scripts.
 
   Fixed:
     VMware::API::vCloud - template_get(), vdc_get() - Missing match target on ternary.*
