@@ -3,7 +3,7 @@ package VMware::vCloud::vApp;
 use Data::Dumper;
 use strict;
 
-our $VERSION = 'v2.400';
+$VMware::vCloud::vApp::VERSION = '2.401';
 
 =head1 NAME
 
@@ -99,16 +99,24 @@ sub recompose {
 
 __END__
 
+=head1 BUGS AND SOURCE
+
+	Bug tracking for this module: https://rt.cpan.org/Public/Dist/Display.html?Name=VMware-vCloud
+
+	Source hosting: http://www.github.com/bennie/perl-VMware-vCloud
+
 =head1 VERSION
 
-  Version: v2.400 (2013-05-03)
+	VMware::vCloud::vApp v2.401 (2014/03/06)
 
-=head1 AUTHOR
+=head1 COPYRIGHT
 
-  Phillip Pollard, <bennie@cpan.org>
+	(c) 2011-2014, Phillip Pollard <bennie@cpan.org>
 
-=head1 LICENSE AND COPYRIGHT
+=head1 LICENSE
 
-  Released under Perl Artistic License
+This source code is released under the "Perl Artistic License 2.0," the text of
+which is included in the LICENSE file of this distribution. It may also be
+reviewed here: http://opensource.org/licenses/artistic-license-2.0
 
 =cut

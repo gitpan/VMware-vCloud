@@ -17,8 +17,6 @@ use Term::Prompt;
 use VMware::vCloud;
 use strict;
 
-my $version = ( split ' ', '$Revision: 1.7 $' )[1];
-
 my ( $username, $password, $hostname, $orgname );
 
 my $ret = GetOptions ( 'username=s' => \$username, 'password=s' => \$password,
@@ -78,7 +76,7 @@ sub select_one {
   my $line = '='x80;
   my $i = 1;
 
-  print "$line\n\n$message\n";
+  print "\n$line\n";
 
   for my $item (@items) {
     my $label = $reverse ? $item : $items{$item};
@@ -86,10 +84,7 @@ sub select_one {
     $i++;
   }
 
-  print "\n$line\n";
-
-  my $id = <STDIN>;
-  chomp $id;
+  my $id = prompt('n',$message, '', undef );
   $id -= 1;
 
   return $reverse ? $items{$items[$id]} : $items[$id];

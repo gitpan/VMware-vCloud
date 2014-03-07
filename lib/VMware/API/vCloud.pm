@@ -5,7 +5,7 @@ use LWP;
 use XML::Simple;
 use strict;
 
-our $VERSION = 'v2.400';
+$VMware::API::vCloud::VERSION = '2.401';
 
 # ADMIN OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-admin_operations.html
 # USER OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-user_operations.html
@@ -175,11 +175,14 @@ sub _fault {
   my $message = "\nERROR: ";
   
   if ( length(@error) and ref $error[0] eq 'HTTP::Response' ) {
-    $message .= $error[0]->status_line;
     if ( $error[0]->content ) {
       $self->_debug(Dumper(\@error));
-      my $ret = $self->_parse_xml($error[0]->content);
-      $message .= ' : '. $ret->{message};
+      $self->_debug('ERROR Status Line: ' . $error[0]->status_line);
+      $self->_debug('ERROR Content: ' . $error[0]->content);
+
+      my $ret; # Try parsing as XML, or fallback to content as message
+      eval { $ret = $self->_parse_xml($error[0]->content); };
+      $message .= ( $@ ? $error[0]->content : $error[0]->status_line . ' : '. $ret->{message} );
     }
     die $message;
   }
@@ -423,6 +426,10 @@ sub login {
   $self->{ua}->default_header('x-vcloud-authorization', $token);
 
   $self->_debug( "Authentication status: " . $response->status_line );
+  if ( $response->status_line =~ /^4\d\d/ ) {
+    die "ERROR: Login Error: " . $response->status_line;
+  }
+
   $self->_debug( "Authentication token: " . $token );
 
   $self->{raw}->{login} = $self->_xml_response($response);
@@ -1502,11 +1509,32 @@ dearly love a few changes, that might help things:
 
 =back
 
+=head1 DEPENDENCIES
+
+  LWP
+  XML::Simple
+
+=head1 BUGS AND SOURCE
+
+	Bug tracking for this module: https://rt.cpan.org/Public/Dist/Display.html?Name=VMware-vCloud
+
+	Source hosting: http://www.github.com/bennie/perl-VMware-vCloud
+
 =head1 VERSION
 
-  Version: v2.400 (2013-05-03)
+	VMware::API::vCloud v2.401 (2014/03/06)
 
-=head1 AUTHOR
+=head1 COPYRIGHT
+
+	(c) 2011-2014, Phillip Pollard <bennie@cpan.org>
+
+=head1 LICENSE
+
+This source code is released under the "Perl Artistic License 2.0," the text of
+which is included in the LICENSE file of this distribution. It may also be
+reviewed here: http://opensource.org/licenses/artistic-license-2.0
+
+=head1 AUTHORSHIP
 
   Phillip Pollard, <bennie@cpan.org>
 
@@ -1517,15 +1545,6 @@ and other such items.
 
   Dave Gress, <dgress@vmware.com> - Handling org admin issues and metadata
   Stuart Johnston, <sjohnston@cpan.org> - authentication and XML on API v1.0
-
-=head1 DEPENDENCIES
-
-  LWP
-  XML::Simple
-
-=head1 LICENSE AND COPYRIGHT
-
-  Released under Perl Artistic License
 
 =head1 SEE ALSO
 

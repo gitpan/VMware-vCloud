@@ -1,30 +1,40 @@
---- #YAML:1.0
-name: VMware-vCloud
-abstract: VMware vCloud API
-version: v2.400
+---
+abstract: 'VMware vCloud API'
 author:
- - Phillip Pollard <bennie@cpan.org>
-license: perl
-distribution_type: module
+  - 'Phil Pollard <bennie@cpan.org>'
+build_requires:
+  ExtUtils::MakeMaker: 0
+configure_requires:
+  ExtUtils::MakeMaker: 0
+dynamic_config: 1
+generated_by: 'ExtUtils::MakeMaker version 6.9, CPAN::Meta::Converter version 2.133380'
+license: artistic_2
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: VMware-vCloud
+no_index:
+  directory:
+    - t
+    - inc
+    - t
+provides:
+  VMware::API::vCloud:
+    file: lib/VMware/API/vCloud.pm
+    version: 2.401
+  VMware::vCloud:
+    file: lib/VMware/vCloud.pm
+    version: 2.401
+  VMware::vCloud::vApp:
+    file: lib/VMware/vCloud/vApp.pm
+    version: 2.401
 requires:
-  perl: 5.005_03
   Cache::Bounded: 1.05
   Data::Dumper: 0
   LWP: 5
   XML::Simple: 2
-build_requires:
-  Test: 0
+  perl: 5.006001
 resources:
-  license: http://dev.perl.org/licenses/
-meta-spec:
-  version: 1.4
-  url: http://module-build.sourceforge.net/META-spec-v1.4.html
-generated_by: hand
-provides:
-  VMware::vCloud:
-    file: lib/VMware/vCloud.pm
-    version: v2.400
-  VMware::API::vCloud:
-    file: lib/VMware/API/vCloud.pm
-    version: v2.400
-
+  bugtracker: https://rt.cpan.org/Dist/Display.html?Name=VMware-vCloud
+  repository: git://github.com/bennie/perl-VMware-vCloud.git
+version: 2.401
