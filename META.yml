@@ -21,20 +21,25 @@ no_index:
 provides:
   VMware::API::vCloud:
     file: lib/VMware/API/vCloud.pm
-    version: 2.401
+    version: 2.402
   VMware::vCloud:
     file: lib/VMware/vCloud.pm
-    version: 2.401
+    version: 2.402
   VMware::vCloud::vApp:
     file: lib/VMware/vCloud/vApp.pm
-    version: 2.401
+    version: 2.402
 requires:
   Cache::Bounded: 1.05
   Data::Dumper: 0
+  File::Slurp: 0
+  Getopt::Long: 0
   LWP: 5
+  Term::Prompt: 0
+  Test: 0
+  Test::More: 0
   XML::Simple: 2
   perl: 5.006001
 resources:
   bugtracker: https://rt.cpan.org/Dist/Display.html?Name=VMware-vCloud
   repository: git://github.com/bennie/perl-VMware-vCloud.git
-version: 2.401
+version: 2.402

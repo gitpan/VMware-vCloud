@@ -3,9 +3,11 @@ package VMware::API::vCloud;
 use Data::Dumper;
 use LWP;
 use XML::Simple;
+
+use warnings;
 use strict;
 
-$VMware::API::vCloud::VERSION = '2.401';
+$VMware::API::vCloud::VERSION = '2.402';
 
 # ADMIN OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-admin_operations.html
 # USER OPTS - http://www.vmware.com/support/vcd/doc/rest-api-doc-1.5-html/landing-user_operations.html
@@ -1522,7 +1524,7 @@ dearly love a few changes, that might help things:
 
 =head1 VERSION
 
-	VMware::API::vCloud v2.401 (2014/03/06)
+	VMware::API::vCloud v2.402 (2014/03/12)
 
 =head1 COPYRIGHT
 

@@ -5,10 +5,10 @@ use Data::Dumper;
 use VMware::API::vCloud;
 use VMware::vCloud::vApp;
 
-use strict;
 use warnings;
+use strict;
 
-$VMware::vCloud::VERSION = '2.401';
+$VMware::vCloud::VERSION = '2.402';
 
 =head1 NAME
 
@@ -1067,7 +1067,7 @@ identifier of an object. This module implements this best practice.
 
 =head1 VERSION
 
-	VMware::vCloud v2.401 (2014/03/06)
+	VMware::vCloud v2.402 (2014/03/12)
 
 =head1 COPYRIGHT
 

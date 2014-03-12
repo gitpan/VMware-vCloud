@@ -5,12 +5,17 @@ WriteMakefile(
   AUTHOR   => 'Phil Pollard <bennie@cpan.org>',
   LICENSE  => 'artistic_2',
   NAME     => 'VMware::vCloud',
-  VERSION  => '2.401',
+  VERSION  => '2.402',
 
   PREREQ_PM => {
+          'Getopt::Long' => 0,
           'Cache::Bounded' => '1.05',
           'Data::Dumper' => 0,
           'XML::Simple' => 2,
+          'Test::More' => 0,
+          'Test' => 0,
+          'Term::Prompt' => 0,
+          'File::Slurp' => 0,
           'LWP' => 5
         },
 
@@ -23,15 +28,15 @@ WriteMakefile(
 
 	{
           'VMware::vCloud::vApp' => {
-                                      'version' => '2.401',
+                                      'version' => '2.402',
                                       'file' => 'lib/VMware/vCloud/vApp.pm'
                                     },
           'VMware::vCloud' => {
-                                'version' => '2.401',
+                                'version' => '2.402',
                                 'file' => 'lib/VMware/vCloud.pm'
                               },
           'VMware::API::vCloud' => {
-                                     'version' => '2.401',
+                                     'version' => '2.402',
                                      'file' => 'lib/VMware/API/vCloud.pm'
                                    }
         },

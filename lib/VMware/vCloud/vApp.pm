@@ -1,9 +1,11 @@
 package VMware::vCloud::vApp;
 
 use Data::Dumper;
+
+use warnings;
 use strict;
 
-$VMware::vCloud::vApp::VERSION = '2.401';
+$VMware::vCloud::vApp::VERSION = '2.402';
 
 =head1 NAME
 
@@ -107,7 +109,7 @@ __END__
 
 =head1 VERSION
 
-	VMware::vCloud::vApp v2.401 (2014/03/06)
+	VMware::vCloud::vApp v2.402 (2014/03/12)
 
 =head1 COPYRIGHT
 
